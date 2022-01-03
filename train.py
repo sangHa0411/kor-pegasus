@@ -75,7 +75,7 @@ def train(args):
         num_train_epochs = args.epochs,                                 # epochs
         save_strategy = 'epoch',                                        # save strategy
         logging_strategy = 'steps',                                     # logging strategy
-        logging_steps = 10000,                                          # logging steps                                         
+        logging_steps = 1000,                                           # logging steps                                         
         per_device_train_batch_size = args.train_batch_size,            # train batch size
         warmup_steps=args.warmup_steps,                                 # warmup steps
         weight_decay=args.weight_decay,                                 # weight decay
@@ -153,8 +153,8 @@ if __name__ == '__main__':
 
     # -- Training
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 10)')
-    parser.add_argument('--learning_rate', type=float, default=5e-5, help='learning rate (default: 3e-5)')
-    parser.add_argument('--train_batch_size', type=int, default=16, help='train batch size (default: 16)')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate (default: 1e-4)')
+    parser.add_argument('--train_batch_size', type=int, default=2, help='train batch size (default: 2)')
     parser.add_argument('--warmup_steps', type=int, default=20000, help='number of warmup steps for learning rate scheduler (default: 20000)')
     parser.add_argument('--weight_decay', type=float, default=1e-2, help='streng1th of weight decay (default: 1e-2)')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=16, help='gradient_accumulation_steps of training (default: 16)')
@@ -162,8 +162,8 @@ if __name__ == '__main__':
     parser.add_argument('--overwrite_output_dir', type=int, default=0, help='overwriting output directory')
 
     # -- Data
-    parser.add_argument('--max_input_len', type=int, default=2048, help='max length of tokenized document (default: 2048)')
-    parser.add_argument('--max_target_len', type=int, default=1024, help='max length of tokenized summary (default: 1024)')
+    parser.add_argument('--max_input_len', type=int, default=1024, help='max length of tokenized document (default: 1024)')
+    parser.add_argument('--max_target_len', type=int, default=512, help='max length of tokenized summary (default: 512)')
 
     # -- Seed
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
