@@ -1,19 +1,22 @@
+import math
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss
-from transformers.file_utils import (
-    add_end_docstrings,
-    add_start_docstrings_to_model_forward,
-    replace_return_docstrings,
-)
+
+from typing import Optional
+
 from transformers.modeling_outputs import Seq2SeqLMOutput
 from transformers.models.pegasus.configuration_pegasus import PegasusConfig
-from transformers.models.pegasus.modeling_pegasus import (PegasusForConditionalGeneration, 
-    PegasusModel,
-    PEGASUS_INPUTS_DOCSTRING,
-    _CONFIG_FOR_DOC,
-    PEGASUS_GENERATION_EXAMPLE
+
+from transformers.models.pegasus.modeling_pegasus import (
+    PegasusForConditionalGeneration,
+    PegasusModel, 
+    PegasusSinusoidalPositionalEmbedding,
+    PegasusEncoder, 
+    PegasusDecoder,
+    PegasusEncoderLayer,
+    PegasusDecoderLayer
 )
 
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
@@ -28,6 +31,71 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
 
     return shifted_input_ids
 
+class PegasusAlbertEncoder(PegasusEncoder):
+    def __init__(self, config: PegasusConfig, embed_tokens: Optional[nn.Embedding] = None):
+        super().__init__(config)
+
+        self.dropout = config.dropout
+        self.layerdrop = config.encoder_layerdrop
+
+        embed_dim = config.d_model
+        self.padding_idx = config.pad_token_id
+        self.max_source_positions = config.max_position_embeddings
+        self.embed_scale = math.sqrt(embed_dim) if config.scale_embedding else 1.0
+
+        if embed_tokens is not None:
+            self.embed_tokens = embed_tokens
+        else:
+            self.embed_tokens = nn.Embedding(config.vocab_size, embed_dim, self.padding_idx)
+
+        self.embed_positions = PegasusSinusoidalPositionalEmbedding(
+            config.max_position_embeddings,
+            embed_dim,
+            self.padding_idx,
+        )
+
+        shared_layer = PegasusEncoderLayer(config)
+        self.layers = nn.ModuleList([shared_layer for _ in range(config.encoder_layers)])
+        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.gradient_checkpointing = False
+
+class PegasusAlbertDecoder(PegasusDecoder):
+    def __init__(self, config: PegasusConfig, embed_tokens: Optional[nn.Embedding] = None):
+        super().__init__(config)
+        self.dropout = config.dropout
+        self.layerdrop = config.decoder_layerdrop
+        self.padding_idx = config.pad_token_id
+        self.max_target_positions = config.max_position_embeddings
+        self.embed_scale = math.sqrt(config.d_model) if config.scale_embedding else 1.0
+
+        if embed_tokens is not None:
+            self.embed_tokens = embed_tokens
+        else:
+            self.embed_tokens = nn.Embedding(config.vocab_size, config.d_model, self.padding_idx)
+
+        self.embed_positions = PegasusSinusoidalPositionalEmbedding(
+            config.max_position_embeddings,
+            config.d_model,
+            self.padding_idx,
+        )
+
+        shared_layer = PegasusDecoderLayer(config)
+        self.layers = nn.ModuleList([shared_layer for _ in range(config.decoder_layers)])
+        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.gradient_checkpointing = False
+
+
+class PegasusAlbertModel(PegasusModel):
+    def __init__(self, config: PegasusConfig):
+        super().__init__(config)
+
+        padding_idx, vocab_size = config.pad_token_id, config.vocab_size
+        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
+
+        self.encoder = PegasusAlbertEncoder(config, self.shared)
+        self.decoder = PegasusAlbertDecoder(config, self.shared)
+
+
 class PegasusForPretraining(PegasusForConditionalGeneration):
     base_model_prefix = "model"
     _keys_to_ignore_on_load_missing = [
@@ -40,13 +108,10 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
 
     def __init__(self, config: PegasusConfig):
         super().__init__(config)
-        self.model = PegasusModel(config)
+        self.model = PegasusAlbertModel(config)
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
 
-    @add_start_docstrings_to_model_forward(PEGASUS_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=Seq2SeqLMOutput, config_class=_CONFIG_FOR_DOC)
-    @add_end_docstrings(PEGASUS_GENERATION_EXAMPLE)
     def forward(
         self,
         input_ids=None,
@@ -67,12 +132,7 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
         output_hidden_states=None,
         return_dict=None,
     ):
-        r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the masked language modeling loss. Indices should either be in `[0, ..., config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-            (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-        Returns:
-        """
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if labels is not None:
@@ -129,44 +189,3 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
             encoder_hidden_states=outputs.encoder_hidden_states,
             encoder_attentions=outputs.encoder_attentions,
         )
-
-    def prepare_inputs_for_generation(
-        self,
-        decoder_input_ids,
-        past=None,
-        attention_mask=None,
-        head_mask=None,
-        decoder_head_mask=None,
-        cross_attn_head_mask=None,
-        use_cache=None,
-        encoder_outputs=None,
-        **kwargs
-    ):
-        # cut decoder_input_ids if past is used
-        if past is not None:
-            decoder_input_ids = decoder_input_ids[:, -1:]
-
-        return {
-            "input_ids": None,  # encoder_outputs is defined. input_ids not needed
-            "encoder_outputs": encoder_outputs,
-            "past_key_values": past,
-            "decoder_input_ids": decoder_input_ids,
-            "attention_mask": attention_mask,
-            "head_mask": head_mask,
-            "decoder_head_mask": decoder_head_mask,
-            "cross_attn_head_mask": cross_attn_head_mask,
-            "use_cache": use_cache,  # change this to avoid caching (presumably for debugging)
-        }
-
-    def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):
-        return shift_tokens_right(labels, self.config.pad_token_id, self.config.decoder_start_token_id)
-
-    @staticmethod
-    def _reorder_cache(past, beam_idx):
-        reordered_past = ()
-        for layer_past in past:
-            # cached cross_attention states don't have to be reordered -> they are always the same
-            reordered_past += (
-                tuple(past_state.index_select(0, beam_idx) for past_state in layer_past[:2]) + layer_past[2:],
-            )
-        return reordered_past
