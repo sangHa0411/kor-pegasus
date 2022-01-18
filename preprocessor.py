@@ -1,6 +1,24 @@
 import math
 import numpy as np
 
+class Filtering :
+    def __init__(self, max_word_sizes) :
+        self.max_word_sizes = max_word_sizes
+        
+    def __call__(self, examples) :
+        text_data = examples['text']
+        sen_list = text_data.split('\n')
+
+        tokens_num = 0
+
+        for sen in sen_list :
+            tokens = sen.split(' ')
+            tokens_num += len(tokens)
+
+        if tokens_num > self.max_word_sizes :
+            return False
+        return True
+
 class Masking :
     def __init__(self, gcp_ratio) :
         self.gcp_ratio = gcp_ratio
@@ -14,7 +32,10 @@ class Masking :
             sen_list = text.split('\n')
 
             sen_size = len(sen_list)
-            gap_sen_size = math.ceil(self.gcp_ratio * sen_size)
+            gap_sen_size = math.floor(self.gcp_ratio * sen_size)
+            if gap_sen_size == 0 :
+                gap_sen_size = 1
+
             gap_indices = np.random.choice(sen_size, gap_sen_size, replace=False)
             
             source_text = []
@@ -27,6 +48,7 @@ class Masking :
                     source_text.append(sen_list[i])
 
             source_text = ' '.join(source_text)
+            source_text = re.sub(' <mask2>', '<mask2>', source_text)
             source_data.append(source_text)
 
             target_text = ' '.join(target_text)
@@ -35,8 +57,7 @@ class Masking :
         examples['document'] = source_data
         examples['summary'] = target_data
         return examples
-
-
+        
 class Preprocessor :
     def __init__(self, tokenizer, max_input_length, max_target_length) :
         self.tokenizer = tokenizer

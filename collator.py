@@ -3,12 +3,14 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
+from transformers.modeling_utils import PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from transformers.data.data_collator import DataCollatorForLanguageModeling
 
 @dataclass
 class DataCollatorForPegasus(DataCollatorForLanguageModeling):
     tokenizer: PreTrainedTokenizerBase
+    model: PreTrainedModel = None
     mlm: bool = True
     mlm_probability: float = 0.15
     label_pad_token_id = -100
@@ -16,7 +18,7 @@ class DataCollatorForPegasus(DataCollatorForLanguageModeling):
     tf_experimental_compile: bool = False
     return_tensors: str = "pt"
 
-    def torch_call(self, examples: List[Union[List[int], Any, Dict[str, Any]]]) -> Dict[str, Any]:
+    def torch_call(self, examples):
         labels = [feature["labels"] for feature in examples] if "labels" in examples[0].keys() else None
         if labels is not None:
             max_label_length = max(len(l) for l in labels)
@@ -38,4 +40,10 @@ class DataCollatorForPegasus(DataCollatorForLanguageModeling):
         batch["input_ids"], batch["mlm_labels"] = self.torch_mask_tokens(
             batch["input_ids"], special_tokens_mask=special_tokens_mask
         )
+
+        # prepare decoder_input_ids
+        if self.model is not None and hasattr(self.model, "prepare_decoder_input_ids_from_labels"):
+            decoder_input_ids = self.model.prepare_decoder_input_ids_from_labels(labels=batch["labels"])
+            batch["decoder_input_ids"] = decoder_input_ids
+
         return batch

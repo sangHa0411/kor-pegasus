@@ -8,7 +8,7 @@ import random
 import torch
 
 from loader import DataLoader
-from preprocessor import Masking, Preprocessor
+from preprocessor import Filter, Masking, Preprocessor
 from collator import DataCollatorForPegasus
 
 import wandb
@@ -38,16 +38,19 @@ def train(args):
     datasets = article_loader.load_data(api_key=api_key)
     print(datasets)
 
+    print('\nFiltering Too Long Text Data')
+    data_filter = Filter(500)
+    datasets = datasets.filter(data_filter)
+
     # -- Preprocessing
-    print('\nPreprocessing Data')
-    masking = Masking(0.3)
+    print('\nGenerating Gap Sentences Data')
+    masking = Masking(0.15)
     datasets = datasets.map(masking, 
         batched=True,
         num_proc=4,
         load_from_cache_file=True,
     )
-    print(datasets)
-    
+ 
     # -- Tokenizing
     print('\nTokenizing')
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, use_fast=True)
@@ -86,7 +89,11 @@ def train(args):
     )
  
     # -- Collator
-    data_collator = DataCollatorForPegasus(tokenizer, mlm=True, mlm_probability=0.15)
+    data_collator = DataCollatorForPegasus(tokenizer=tokenizer, 
+        model=model,
+        mlm=True, 
+        mlm_probability=0.15
+    )
 
     # -- Trainer
     trainer = Seq2SeqTrainer(
@@ -163,7 +170,7 @@ if __name__ == '__main__':
 
     # -- Data
     parser.add_argument('--max_input_len', type=int, default=1024, help='max length of tokenized document (default: 1024)')
-    parser.add_argument('--max_target_len', type=int, default=512, help='max length of tokenized summary (default: 512)')
+    parser.add_argument('--max_target_len', type=int, default=256, help='max length of tokenized summary (default: 256)')
 
     # -- Seed
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')

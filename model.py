@@ -10,13 +10,8 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 from transformers.models.pegasus.configuration_pegasus import PegasusConfig
 
 from transformers.models.pegasus.modeling_pegasus import (
+    PegasusModel,
     PegasusForConditionalGeneration,
-    PegasusModel, 
-    PegasusSinusoidalPositionalEmbedding,
-    PegasusEncoder, 
-    PegasusDecoder,
-    PegasusEncoderLayer,
-    PegasusDecoderLayer
 )
 
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
@@ -31,85 +26,23 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
 
     return shifted_input_ids
 
-class PegasusAlbertEncoder(PegasusEncoder):
-    def __init__(self, config: PegasusConfig, embed_tokens: Optional[nn.Embedding] = None):
-        super().__init__(config)
-
-        self.dropout = config.dropout
-        self.layerdrop = config.encoder_layerdrop
-
-        embed_dim = config.d_model
-        self.padding_idx = config.pad_token_id
-        self.max_source_positions = config.max_position_embeddings
-        self.embed_scale = math.sqrt(embed_dim) if config.scale_embedding else 1.0
-
-        if embed_tokens is not None:
-            self.embed_tokens = embed_tokens
-        else:
-            self.embed_tokens = nn.Embedding(config.vocab_size, embed_dim, self.padding_idx)
-
-        self.embed_positions = PegasusSinusoidalPositionalEmbedding(
-            config.max_position_embeddings,
-            embed_dim,
-            self.padding_idx,
-        )
-
-        shared_layer = PegasusEncoderLayer(config)
-        self.layers = nn.ModuleList([shared_layer for _ in range(config.encoder_layers)])
-        self.layer_norm = nn.LayerNorm(config.d_model)
-        self.gradient_checkpointing = False
-
-class PegasusAlbertDecoder(PegasusDecoder):
-    def __init__(self, config: PegasusConfig, embed_tokens: Optional[nn.Embedding] = None):
-        super().__init__(config)
-        self.dropout = config.dropout
-        self.layerdrop = config.decoder_layerdrop
-        self.padding_idx = config.pad_token_id
-        self.max_target_positions = config.max_position_embeddings
-        self.embed_scale = math.sqrt(config.d_model) if config.scale_embedding else 1.0
-
-        if embed_tokens is not None:
-            self.embed_tokens = embed_tokens
-        else:
-            self.embed_tokens = nn.Embedding(config.vocab_size, config.d_model, self.padding_idx)
-
-        self.embed_positions = PegasusSinusoidalPositionalEmbedding(
-            config.max_position_embeddings,
-            config.d_model,
-            self.padding_idx,
-        )
-
-        shared_layer = PegasusDecoderLayer(config)
-        self.layers = nn.ModuleList([shared_layer for _ in range(config.decoder_layers)])
-        self.layer_norm = nn.LayerNorm(config.d_model)
-        self.gradient_checkpointing = False
-
-
-class PegasusAlbertModel(PegasusModel):
-    def __init__(self, config: PegasusConfig):
-        super().__init__(config)
-
-        padding_idx, vocab_size = config.pad_token_id, config.vocab_size
-        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
-
-        self.encoder = PegasusAlbertEncoder(config, self.shared)
-        self.decoder = PegasusAlbertDecoder(config, self.shared)
-
-
 class PegasusForPretraining(PegasusForConditionalGeneration):
     base_model_prefix = "model"
     _keys_to_ignore_on_load_missing = [
         r"final_logits_bias",
         r"encoder\.version",
         r"decoder\.version",
+        r"encoder_lm_head\.weight",
         r"lm_head\.weight",
         r"embed_positions\.weight",
     ]
 
     def __init__(self, config: PegasusConfig):
         super().__init__(config)
-        self.model = PegasusAlbertModel(config)
+        self.model = PegasusModel(config)
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
+        
+        self.encoder_lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
 
     def forward(
@@ -163,7 +96,7 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
         encoder_last_hidden_state = outputs.encoder_last_hidden_state
 
         gsc_logits = self.lm_head(last_hidden_state) + self.final_logits_bias
-        mlm_logits = self.lm_head(encoder_last_hidden_state) + self.final_logits_bias 
+        mlm_logits = self.encoder_lm_head(encoder_last_hidden_state) + self.final_logits_bias 
 
         gsc_loss = None
         if labels is not None:
