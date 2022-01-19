@@ -1,3 +1,4 @@
+import re
 import math
 import numpy as np
 
@@ -57,7 +58,7 @@ class Masking :
         examples['document'] = source_data
         examples['summary'] = target_data
         return examples
-        
+
 class Preprocessor :
     def __init__(self, tokenizer, max_input_length, max_target_length) :
         self.tokenizer = tokenizer

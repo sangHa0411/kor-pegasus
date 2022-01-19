@@ -8,7 +8,7 @@ import random
 import torch
 
 from loader import DataLoader
-from preprocessor import Filter, Masking, Preprocessor
+from preprocessor import Filtering, Masking, Preprocessor
 from collator import DataCollatorForPegasus
 
 import wandb
@@ -33,13 +33,13 @@ def train(args):
     
     # -- Datasets
     print('\nLoading Article Data')
-    api_key = os.getenv('HUGGINGFACE_AUTH_KEY')
+    api_key = os.getenv('HUGGINGFACE_KEY')
     article_loader = DataLoader(data_size=10, seed=args.seed)
     datasets = article_loader.load_data(api_key=api_key)
     print(datasets)
 
     print('\nFiltering Too Long Text Data')
-    data_filter = Filter(500)
+    data_filter = Filtering(500)
     datasets = datasets.filter(data_filter)
 
     # -- Preprocessing
@@ -76,7 +76,8 @@ def train(args):
         output_dir = args.output_dir,                                   # output directory
         logging_dir = args.logging_dir,                                 # logging directory
         num_train_epochs = args.epochs,                                 # epochs
-        save_strategy = 'epoch',                                        # save strategy
+        save_strategy = 'steps',                                        # save strategy
+        save_steps = 5000,                                              # save steps
         logging_strategy = 'steps',                                     # logging strategy
         logging_steps = 1000,                                           # logging steps                                         
         per_device_train_batch_size = args.train_batch_size,            # train batch size
@@ -125,10 +126,10 @@ def train(args):
 
 def main(args):
     load_dotenv(dotenv_path=args.dotenv_path)
-    WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+    WANDB_AUTH_KEY = os.getenv('WANDB_KEY')
     wandb.login(key=WANDB_AUTH_KEY)
 
-    wandb_name = f"epochs:{args.epochs}_batch_size:{args.train_batch_size}_warmup_steps:{args.warmup_steps}_weight_decay:{args.weight_decay}"
+    wandb_name = f"pretraining day1"
     wandb.init(
         entity="sangha0411",
         project="PEGASUS pretrainging", 
@@ -160,8 +161,8 @@ if __name__ == '__main__':
 
     # -- Training
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 10)')
-    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate (default: 1e-4)')
-    parser.add_argument('--train_batch_size', type=int, default=2, help='train batch size (default: 2)')
+    parser.add_argument('--learning_rate', type=float, default=5e-5, help='learning rate (default: 5e-5)')
+    parser.add_argument('--train_batch_size', type=int, default=8, help='train batch size (default: 8)')
     parser.add_argument('--warmup_steps', type=int, default=20000, help='number of warmup steps for learning rate scheduler (default: 20000)')
     parser.add_argument('--weight_decay', type=float, default=1e-2, help='streng1th of weight decay (default: 1e-2)')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=16, help='gradient_accumulation_steps of training (default: 16)')
@@ -176,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
 
     # -- Wandb
-    parser.add_argument('--dotenv_path', default='./wandb.env', help='input your dotenv path')
+    parser.add_argument('--dotenv_path', default='./path.env', help='input your dotenv path')
 
     args = parser.parse_args()
 
