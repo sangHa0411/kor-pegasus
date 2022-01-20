@@ -7,8 +7,8 @@
 ## 2. Model Structure
   1. Encoder - Decoder Model
   2. 기존의 Document에서 k% 비율의 문장 만큼을 가져와서 Target Text로 설정한다.
-     * 문장이 빠진 자리에는 MASK2 토큰을 삽입한다.
-  3. 입력 문장의 전체 토큰의 갯수의 n% 만큼의 토큰에 MASK1 토큰으로 Masking 처리를 한다. 
+     * 문장이 빠진 자리에는 MASK1 토큰을 삽입한다.
+  3. 입력 문장의 전체 토큰의 갯수의 n% 만큼의 토큰에 MASK2 토큰으로 Masking 처리를 한다. 
   4. Decoder의 출력 문장만 을 ground truth와 비교하는 것 이외에도 Encoder의 출력에서 Masking 된 토큰을 찾는 방법으로 학습을 진행한다.
      1. Gap Sentence Generation : GSG
      2. Masked Language Modeling : MLM
