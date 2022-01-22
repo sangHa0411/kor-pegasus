@@ -32,7 +32,6 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
         r"final_logits_bias",
         r"encoder\.version",
         r"decoder\.version",
-        r"encoder_lm_head\.weight",
         r"lm_head\.weight",
         r"embed_positions\.weight",
     ]
@@ -42,7 +41,6 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
         self.model = PegasusModel(config)
         self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         
-        self.encoder_lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
         self.lm_head = nn.Linear(config.d_model, self.model.shared.num_embeddings, bias=False)
 
     def forward(
@@ -96,7 +94,7 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
         encoder_last_hidden_state = outputs.encoder_last_hidden_state
 
         gsc_logits = self.lm_head(last_hidden_state) + self.final_logits_bias
-        mlm_logits = self.encoder_lm_head(encoder_last_hidden_state) + self.final_logits_bias 
+        mlm_logits = self.lm_head(encoder_last_hidden_state) + self.final_logits_bias 
 
         gsc_loss = None
         if labels is not None:
