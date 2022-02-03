@@ -103,7 +103,7 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
             
             if mlm_labels is not None :
                 mlm_loss = loss_fct(mlm_logits.view(-1, self.config.vocab_size), mlm_labels.view(-1))
-                gsc_loss = gsc_loss + mlm_loss
+                gsc_loss = gsc_loss * 0.8 + mlm_loss * 0.2
 
         if not return_dict:
             output = (gsc_logits,) + outputs[1:]
