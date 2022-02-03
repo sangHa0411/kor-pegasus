@@ -1,24 +1,20 @@
+
 import re
 import math
 import numpy as np
 
 class Filtering :
-    def __init__(self, max_word_sizes) :
-        self.max_word_sizes = max_word_sizes
+    def __init__(self, min_sen_size) :
+        self.sen_size = min_sen_size
         
     def __call__(self, examples) :
         text_data = examples['text']
         sen_list = text_data.split('\n')
 
-        tokens_num = 0
-
-        for sen in sen_list :
-            tokens = sen.split(' ')
-            tokens_num += len(tokens)
-
-        if tokens_num > self.max_word_sizes :
+        if len(sen_list) < self.sen_size :
             return False
         return True
+
 
 class Masking :
     def __init__(self, gcp_ratio) :
@@ -33,10 +29,7 @@ class Masking :
             sen_list = text.split('\n')
 
             sen_size = len(sen_list)
-            gap_sen_size = math.floor(self.gcp_ratio * sen_size)
-            if gap_sen_size == 0 :
-                gap_sen_size = 1
-
+            gap_sen_size = math.ceil(self.gcp_ratio * sen_size)
             gap_indices = np.random.choice(sen_size, gap_sen_size, replace=False)
             
             source_text = []
