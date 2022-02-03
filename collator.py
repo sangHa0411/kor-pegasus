@@ -1,7 +1,7 @@
 
 import numpy as np
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional
 
 from transformers.modeling_utils import PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
