@@ -34,13 +34,14 @@ def train(args):
     # -- Datasets
     print('\nLoading Article Data')
     api_key = os.getenv('HUGGINGFACE_KEY')
-    article_loader = DataLoader(data_size=10, seed=args.seed)
+    article_loader = DataLoader(seed=args.seed)
     datasets = article_loader.load_data(api_key=api_key)
     print(datasets)
 
     print('\nFiltering Too Long Text Data')
-    data_filter = Filtering(500)
+    data_filter = Filtering(args.min_sen_size)
     datasets = datasets.filter(data_filter)
+    print(datasets)
 
     # -- Preprocessing
     print('\nGenerating Gap Sentences Data')
@@ -65,7 +66,6 @@ def train(args):
 
     # -- Configuration
     config = AutoConfig.from_pretrained(model_checkpoint)
-    print(config)
 
     # -- Model
     print('\nLoading Model')
@@ -161,8 +161,9 @@ if __name__ == '__main__':
 
     # -- Training
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 10)')
-    parser.add_argument('--learning_rate', type=float, default=5e-5, help='learning rate (default: 5e-5)')
-    parser.add_argument('--train_batch_size', type=int, default=8, help='train batch size (default: 8)')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate (default: 1e-4)')
+    parser.add_argument('--train_batch_size', type=int, default=4, help='train batch size (default: 4)')
+    parser.add_argument('--min_sen_size', type=int, default=3, help='min sentence size (default: 3)')
     parser.add_argument('--warmup_steps', type=int, default=20000, help='number of warmup steps for learning rate scheduler (default: 20000)')
     parser.add_argument('--weight_decay', type=float, default=1e-2, help='streng1th of weight decay (default: 1e-2)')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=16, help='gradient_accumulation_steps of training (default: 16)')
@@ -170,7 +171,7 @@ if __name__ == '__main__':
     parser.add_argument('--overwrite_output_dir', type=int, default=0, help='overwriting output directory')
 
     # -- Data
-    parser.add_argument('--max_input_len', type=int, default=1024, help='max length of tokenized document (default: 1024)')
+    parser.add_argument('--max_input_len', type=int, default=2048, help='max length of tokenized document (default: 2048)')
     parser.add_argument('--max_target_len', type=int, default=256, help='max length of tokenized summary (default: 256)')
 
     # -- Seed
