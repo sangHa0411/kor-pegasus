@@ -3,20 +3,7 @@ import re
 import math
 import numpy as np
 
-class Filtering :
-    def __init__(self, min_sen_size) :
-        self.sen_size = min_sen_size
-        
-    def __call__(self, examples) :
-        text_data = examples['text']
-        sen_list = text_data.split('\n')
-
-        if len(sen_list) < self.sen_size :
-            return False
-        return True
-
-
-class Masking :
+class GapSentenceGeneration :
     def __init__(self, gcp_ratio) :
         self.gcp_ratio = gcp_ratio
         
@@ -51,22 +38,3 @@ class Masking :
         examples['document'] = source_data
         examples['summary'] = target_data
         return examples
-
-class Preprocessor :
-    def __init__(self, tokenizer, max_input_length, max_target_length) :
-        self.tokenizer = tokenizer
-        self.max_input_length = max_input_length
-        self.max_target_length = max_target_length
-
-    def __call__(self, examples):
-        prefix = self.tokenizer.bos_token + ' '
-        inputs = [prefix + doc for doc in examples['document']]
-
-        model_inputs = self.tokenizer(inputs, max_length=self.max_input_length, return_token_type_ids=False, truncation=True)
-
-        # Setup the tokenizer for targets
-        with self.tokenizer.as_target_tokenizer():
-            labels = self.tokenizer(examples["summary"], max_length=self.max_target_length, return_token_type_ids=False, truncation=True)
-
-        model_inputs["labels"] = labels["input_ids"]
-        return model_inputs

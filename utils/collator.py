@@ -35,6 +35,7 @@ class DataCollatorForPegasus(DataCollatorForLanguageModeling):
                     feature["labels"] = np.concatenate([remainder, feature["labels"]]).astype(np.int64)
 
         batch = self.tokenizer.pad(examples, return_tensors="pt", pad_to_multiple_of=self.pad_to_multiple_of)
+        
         # If special token mask has been preprocessed, pop it from the dict.
         special_tokens_mask = batch.pop("special_tokens_mask", None)
         batch["input_ids"], batch["mlm_labels"] = self.torch_mask_tokens(

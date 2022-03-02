@@ -7,15 +7,17 @@ import numpy as np
 import random
 import torch
 
-from loader import DataLoader
-from preprocessor import Filtering, Masking, Preprocessor
-from collator import DataCollatorForPegasus
+from utils.loader import DataLoader
+from utils.gsg import GapSentenceGeneration
+from utils.preprocessor import Filtering
+from utils.encoder import Encoder
+from utils.collator import DataCollatorForPegasus
 
 import wandb
 from dotenv import load_dotenv
 
-from trainer import BucketingTrainer
-from model import PegasusForPretraining
+from trainer.trainer import BucketingTrainer
+from model.model import PegasusForPretraining
 from transformers.trainer_utils import get_last_checkpoint
 from transformers import (
     AutoConfig,
@@ -24,7 +26,6 @@ from transformers import (
 )
 
 def train(args):
-
     # -- Device
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -34,7 +35,7 @@ def train(args):
     # -- Datasets
     print('\nLoading Article Data')
     api_key = os.getenv('HUGGINGFACE_KEY')
-    article_loader = DataLoader(seed=args.seed)
+    article_loader = DataLoader(seed=args.seed, num_proc=4)
     datasets = article_loader.load_data(api_key=api_key)
     print(datasets)
 
@@ -45,18 +46,19 @@ def train(args):
 
     # -- Preprocessing
     print('\nGenerating Gap Sentences Data')
-    masking = Masking(0.15)
-    datasets = datasets.map(masking, 
+    gsg = GapSentenceGeneration(0.15)
+    datasets = datasets.map(gsg, 
         batched=True,
         num_proc=4,
         load_from_cache_file=True,
     )
- 
+    print(datasets)
+
     # -- Tokenizing
     print('\nTokenizing')
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, use_fast=True)
-    preprocessor = Preprocessor(tokenizer, args.max_input_len, args.max_target_len)
-    datasets = datasets.map(preprocessor, 
+    encoder = Encoder(tokenizer, args.max_input_len, args.max_target_len)
+    datasets = datasets.map(encoder, 
         batched=True,
         num_proc=4,
         load_from_cache_file=True,
@@ -73,23 +75,22 @@ def train(args):
     print('Model Type : {}'.format(type(model)))
 
     training_args = Seq2SeqTrainingArguments(
-        output_dir = args.output_dir,                                   # output directory
-        logging_dir = args.logging_dir,                                 # logging directory
-        num_train_epochs = args.epochs,                                 # epochs
-        save_strategy = 'steps',                                        # save strategy
-        save_steps = 5000,                                              # save steps
-        logging_strategy = 'steps',                                     # logging strategy
-        logging_steps = 1000,                                           # logging steps                                         
-        per_device_train_batch_size = args.train_batch_size,            # train batch size
-        warmup_steps=args.warmup_steps,                                 # warmup steps
-        weight_decay=args.weight_decay,                                 # weight decay
-        learning_rate = args.learning_rate,                             # learning rate
-        gradient_accumulation_steps=args.gradient_accumulation_steps,   # accumulation steps
-        fp16=True if args.fp16 == 1 else False,                         # fp 16 flag
+        output_dir = args.output_dir,                                           # output directory
+        logging_dir = args.logging_dir,                                         # logging directory
+        num_train_epochs = args.epochs,                                         # training epochs
+        save_strategy = 'steps',                                                # save strategy
+        save_steps = 5000,                                                      # save steps
+        logging_strategy = 'steps',                                             # logging strategy
+        logging_steps = 1000,                                                   # logging steps                                         
+        per_device_train_batch_size = args.train_batch_size,                    # train batch size
+        warmup_steps=args.warmup_steps,                                         # warmup steps
+        weight_decay=args.weight_decay,                                         # weight decay
+        learning_rate = args.learning_rate,                                     # learning rate
+        gradient_accumulation_steps=args.gradient_accumulation_steps,           # gradients accumulation steps
+        fp16=True if args.fp16 == 1 else False,                                 # fp 16 flag
         overwrite_output_dir=True if args.overwrite_output_dir == 1 else False
     )
-    training_args.size_gap = args.bucketting_size_gap
- 
+
     # -- Collator
     data_collator = DataCollatorForPegasus(tokenizer=tokenizer, 
         model=model,
@@ -98,6 +99,7 @@ def train(args):
     )
 
     # -- Trainer
+    training_args.size_gap = args.bucketting_size_gap
     trainer = BucketingTrainer(
         model,
         training_args,
@@ -106,24 +108,29 @@ def train(args):
         tokenizer=tokenizer,
     )
 
+    if os.path.exists(args.output_dir) :
+        if os.path.isdir(args.output_dir) == False :
+            raise ValueError(f"This directory name has already been used")
+
     # -- Training
     print('\nTraining')
-    last_checkpoint = None
-    if (
-        os.path.isdir(args.output_dir)
-        and not args.overwrite_output_dir
-    ):
-
-        last_checkpoint = get_last_checkpoint(args.output_dir)
-        if last_checkpoint is None and len(os.listdir(args.output_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
+    if os.path.isdir(args.output_dir):
+        last_checkpoint = None
+        if args.overwrite_output_dir == False :
+            last_checkpoint = get_last_checkpoint(args.output_dir)
+            if last_checkpoint is None and len(os.listdir(args.output_dir)) > 0:
+                raise ValueError(
+                    f"Output directory ({args.output_dir}) already exists and is not empty. "
+                    "Use --overwrite_output_dir to overcome."
+                )
 
         train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
         print("Train result: ", train_result)
-        trainer.save_model()
+    else :
+        train_result = trainer.train()
+
+    trainer.save_model()
+        
 
 def main(args):
     load_dotenv(dotenv_path=args.dotenv_path)
