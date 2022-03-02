@@ -15,16 +15,15 @@
      
   ![ksnip_20220120-144831](https://user-images.githubusercontent.com/48673702/150281114-8934accd-622a-4892-a738-abf67545560b.png)
 
-## 3. Environment
-   1. Google Colab Pro Plus
-   2. A100 GPU
-
-## 4. Data
+## 3. Data
    1. 모두의 말뭉치 신문 데이터
-   2. 크기 : 20GB
-   3. 주소 : https://corpus.korean.go.kr/
+   2. 모두의 말뭉치 문어 데이터
+   3. 모두의 말뭉치 구어 데이터
+   4. 나무위키 데이터
+   5. Aihub 전문분야 말뭉치
+   6. 크기 : 대략 60G
   
-## 5. Training
+## 4. Training
    1. Batch Size : 8
    2. Gradient Accumulation Sentence : 16
    3. Total Batch Size : 128
@@ -32,13 +31,13 @@
    5. Epochs : 10
    6. Weight Decay : 1e-2
 
-## 6. Model Size : Base
+## 5. Model Size : Base
    1. Encoder & Decoder Layers : 12
    2. Hidden Size : 768
    3. Feedforward Size : 3072
    4. Attention Head Size : 12
 
-## 7. Code
+## 6. Code
 ```python
 
 from transformers import AutoModelForSeq2SeqLM, AutoConfig, AutoTokenizer
