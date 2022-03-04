@@ -16,7 +16,7 @@ class Encoder :
             labels = self.tokenizer(examples["summary"],
                 max_length=self.max_target_length, 
                 return_token_type_ids=False, 
-                runcation=True
+                truncation=True
             )
 
         model_inputs["labels"] = labels["input_ids"]
