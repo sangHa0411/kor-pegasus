@@ -11,24 +11,24 @@ class BucketSampler :
         self.size_gap = size_gap
         self.num_cores = multiprocessing.cpu_count()
      
-    def sample(self) :
-        batch_map = collections.defaultdict(list)
+    def __call__(self) :
         idx_list = []
         batch_index = []
+        batch_map = collections.defaultdict(list)
 
         data_size = len(self.dataset)
-        len_data = parmap.map(self.get_length, self.dataset,  pm_pbar=True, pm_processes=self.num_cores) 
+        len_data = parmap.map(self.get_length, self.dataset,  pm_pbar=True, pm_processes=self.num_cores)
 
         for idx in range(data_size) :
             src_idx, tar_idx = len_data[idx]
             
             src_group = src_idx // self.size_gap
             tar_group = tar_idx // self.size_gap
-            
             batch_map[src_group, tar_group].append(idx)
             
         batch_key = list(batch_map.keys())
         batch_key = sorted(batch_key, key=itemgetter(0,1), reverse=True) 
+
         # sorting idx list based on size group
         for key in batch_key :
             idx_list.extend(batch_map[key])

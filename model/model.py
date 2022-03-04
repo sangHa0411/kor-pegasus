@@ -1,10 +1,8 @@
-import math
+
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss
-
-from typing import Optional
 
 from transformers.modeling_outputs import Seq2SeqLMOutput
 from transformers.models.pegasus.configuration_pegasus import PegasusConfig
@@ -21,7 +19,6 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
 
     if pad_token_id is None:
         raise ValueError("self.model.config.pad_token_id has to be defined.")
-    # replace possible -100 values in labels by `pad_token_id`
     shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
 
     return shifted_input_ids
@@ -101,6 +98,7 @@ class PegasusForPretraining(PegasusForConditionalGeneration):
             loss_fct = CrossEntropyLoss()
             gsc_loss = loss_fct(gsc_logits.view(-1, self.config.vocab_size), labels.view(-1))
             
+            # calculate loss (gsc loss & mlm loss)
             if mlm_labels is not None :
                 mlm_loss = loss_fct(mlm_logits.view(-1, self.config.vocab_size), mlm_labels.view(-1))
                 gsc_loss = gsc_loss * 0.8 + mlm_loss * 0.2

@@ -14,6 +14,7 @@ class BucketingTrainer(Seq2SeqTrainer):
         if is_datasets_available() and isinstance(train_dataset, datasets.Dataset):
             train_dataset = self._remove_unused_columns(train_dataset, description="training")
 
+        # bucketing using input sentence length and label sentence length
         train_sampler = BucketSampler(dataset=train_dataset, 
             batch_size=self.args.train_batch_size, 
             size_gap=self.args.size_gap
@@ -21,7 +22,7 @@ class BucketingTrainer(Seq2SeqTrainer):
 
         return DataLoader(
             train_dataset,                                  # dataset
-            batch_sampler=train_sampler.sample(),           # sampler
+            batch_sampler=train_sampler,                    # sampler
             collate_fn=self.data_collator,                  # collator
             num_workers=self.args.dataloader_num_workers,   # workers
             pin_memory=self.args.dataloader_pin_memory,

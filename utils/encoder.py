@@ -12,9 +12,12 @@ class Encoder :
 
         model_inputs = self.tokenizer(inputs, max_length=self.max_input_length, return_token_type_ids=False, truncation=True)
 
-        # Setup the tokenizer for targets
         with self.tokenizer.as_target_tokenizer():
-            labels = self.tokenizer(examples["summary"], max_length=self.max_target_length, return_token_type_ids=False, truncation=True)
+            labels = self.tokenizer(examples["summary"],
+                max_length=self.max_target_length, 
+                return_token_type_ids=False, 
+                runcation=True
+            )
 
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs

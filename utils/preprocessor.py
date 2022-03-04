@@ -1,7 +1,6 @@
 
 import re
 from abc import *
-from nltk.tokenize import sent_tokenize
 
 class Filtering :
     def __init__(self, min_sen_size) :
@@ -15,6 +14,7 @@ class Filtering :
             return False
         return True
 
+# eda 이후에 각 데이터 특성에 알맞게 하위 클래스 생성
 class Preprocessor(metaclass=ABCMeta) :
     def __init__(self, ) :
         pass
@@ -34,25 +34,3 @@ class Preprocessor(metaclass=ABCMeta) :
     @abstractmethod
     def preprocess(self, text) :
         return text
-
-class NewspaperPreprocessor(Preprocessor) :
-
-    def preprocess(self, text) :
-        sen_list = text.split('\n')
-
-        sen_dataset = []
-        for sen in sen_list :
-            sens = sent_tokenize(sen)
-            sen_dataset.extend(sens)
-
-        text = '\n'.join(sen_dataset)
-        return text
-
-class NamuwikiPreprocessor(Preprocessor) :
-
-    def preprocess(self, text) :
-        sen_list = text.split('\n')
-        sen_list = [sen for sen in sen_list if '= =' not in sen]
-        text = '\n'.join(sen_list)
-        return text
-
