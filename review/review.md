@@ -34,11 +34,12 @@
                       3. 따라서 총 4개의 방법으로 문장의 선택 방법이 존재한다.
 
                   3. 문장 선택에 대한 예시
+                      * ![스크린샷 2022-03-13 오전 10 58 27](https://user-images.githubusercontent.com/48673702/158041547-e3259477-4b0e-4829-8e3b-4dca984c621b.png)
                       *  하나의 문서에서 gap sentence를 어떻게 선정할 지에 대한 예시
                           1. Red : Leed (문서의 처음 부분을 gap sentence로 선정)
                           2. Green : Random (문서에서 무작위로 문장을 선정해서 gap-setence를 선정)
                           3. Blue : Ind-Orig (문서에서 각각의 문장을 rouge-f1 score를 계산하는 방법으로 나머지 문서와 점수를 계산하고 gap-sentence를 선정)
-                      * ![스크린샷 2022-03-13 오전 10 58 27](https://user-images.githubusercontent.com/48673702/158041547-e3259477-4b0e-4829-8e3b-4dca984c621b.png)
+        
 
   2. Masked Language Model
       1. 방향 : BERT 논문과 유사하게 입력 문서에서 전체 토큰의 15%정도 되는 토큰을 선정한다.
@@ -64,7 +65,7 @@
   5. arXiv : 과학 publication의 body를 기반으로 abstract를 생성하는 데이터셋
   6. 그 외 다양하게 존재
 
-## 7. Model size & hyperparameters
+## 7. Model size
   1. PEGASUS - Base
       * Layer : 12
       * Hidden size : 768
@@ -77,29 +78,27 @@
       * Feedforward size : 4096
       * Attention Head map : 16
       * Train Batch Size : 8192
-  3. Hyperparameter
-      * Optimizer : Adafactor
-      * Square root learning rate decay
-      * Dropout : 0.1
-      * Pretraining steps : 500k
 
  ## 8. Ablations on PEGASUS-base
   1. Pre-training Corpus 실험 결과
       1. C4 데이터셋을 학습한 모델보다 HugeNews를 학습한 모델이 XSum, CNN/DailyMail (뉴스 기사 요약 데이터셋) 에서 높은 성능을 가지는 것을 확인할 수 있었다.
       2. C4 데이터셋을 학습한 모델이 HugeNews를 학습한 모델보다 WikiHow, Reddit TIFU 데이터셋(non-news dataset)에서 높은 점수를 가지는 것을 확인할 수 있었다.
-      3. ![스크린샷 2022-03-13 오전 11 19 53](https://user-images.githubusercontent.com/48673702/158042067-a777bf1f-603b-49bf-b6c8-6c46c6adfbe0.png)
+      3. image
+        ![스크린샷 2022-03-13 오전 11 19 53](https://user-images.githubusercontent.com/48673702/158042067-a777bf1f-603b-49bf-b6c8-6c46c6adfbe0.png)
 
   2. GSR 실험 결과
       1. 어떠한 방식으로 gap sentence들을 선정하는 것이 높은 성능을 가지는가에 대한 실험
       2. PEGASUS base Model & C4 pretraining dataset 기준
       3. 대체적으로 Ind-Orig 방법이 높은 성능을 가지는 것을 확인할 수 있었다.
       4. News Dataset에는 Lead 방법이 높은 성능을 가졌지만 WikiHow, Reddit (non-news dataset)에는 낮은 성능을 가지는 것을 확인할 수 있었다.
-      5. ![스크린샷 2022-03-13 오전 11 32 45](https://user-images.githubusercontent.com/48673702/158042362-2536b6bd-a4a4-4141-ac60-bdfdf40234a6.png)
+      5. image
+        ![스크린샷 2022-03-13 오전 11 32 45](https://user-images.githubusercontent.com/48673702/158042362-2536b6bd-a4a4-4141-ac60-bdfdf40234a6.png)
 
   3. Gap sentence의 비율에 대한 실험
       1. 대체적으로 15% ~ 50%가 높은 성능을 가지는 것을 확인할 수 있다.
       2. 각 Downstream Task에 따라서 최적의 비율이 다르다.
-      3. ![스크린샷 2022-03-13 오전 11 37 38](https://user-images.githubusercontent.com/48673702/158042483-ef03ecb0-b5a6-49a9-90a0-ba305fbda4be.png)  
+      3. image
+        ![스크린샷 2022-03-13 오전 11 37 38](https://user-images.githubusercontent.com/48673702/158042483-ef03ecb0-b5a6-49a9-90a0-ba305fbda4be.png)  
 
   4. MLM 
       1. Gap Sentence를 30%로 선정하고 Masked token을 15%로 선정해서 모델을 학습
@@ -109,7 +108,14 @@
       5. 논문에서는 결과적으로 PEGASUS large 모델은 MLM을 사용하지 않았다.
 
 ## 9. 실험 결과
+  1. Downstream tasks
+      1. 대부분의 과제에 대해서 PEGASUS-base 모델이 이전의 SOTA 보다 높은 성능을 가지는 것을 확인할 수 있었다.
+      2. PEGASUS-large 모델이 PEGASUS-base 모델보다 더 높은 성능을 가졌다.
+     
+  2. image
+      ![스크린샷 2022-03-13 오전 11 54 35](https://user-images.githubusercontent.com/48673702/158042945-16c833a4-b2d7-4770-bb0e-0e7638d25f4f.png)  
 
 
-
+## 10. Hayperparameter
+  ![스크린샷 2022-03-13 오후 12 00 23](https://user-images.githubusercontent.com/48673702/158043095-9591f70d-a0b6-4d72-98e5-a00105b9617a.png)
 
