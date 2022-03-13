@@ -81,16 +81,34 @@
       * Optimizer : Adafactor
       * Square root learning rate decay
       * Dropout : 0.1
+      * Pretraining steps : 500k
 
  ## 8. Ablations on PEGASUS-base
-  1. 실험 결과
+  1. Pre-training Corpus 실험 결과
       1. C4 데이터셋을 학습한 모델보다 HugeNews를 학습한 모델이 XSum, CNN/DailyMail (뉴스 기사 요약 데이터셋) 에서 높은 성능을 가지는 것을 확인할 수 있었다.
-      2. 
-      
- 
-    ![스크린샷 2022-03-13 오전 11 19 53](https://user-images.githubusercontent.com/48673702/158042067-a777bf1f-603b-49bf-b6c8-6c46c6adfbe0.png)
+      2. C4 데이터셋을 학습한 모델이 HugeNews를 학습한 모델보다 WikiHow, Reddit TIFU 데이터셋(non-news dataset)에서 높은 점수를 가지는 것을 확인할 수 있었다.
+      3. ![스크린샷 2022-03-13 오전 11 19 53](https://user-images.githubusercontent.com/48673702/158042067-a777bf1f-603b-49bf-b6c8-6c46c6adfbe0.png)
 
+  2. GSR 실험 결과
+      1. 어떠한 방식으로 gap sentence들을 선정하는 것이 높은 성능을 가지는가에 대한 실험
+      2. PEGASUS base Model & C4 pretraining dataset 기준
+      3. 대체적으로 Ind-Orig 방법이 높은 성능을 가지는 것을 확인할 수 있었다.
+      4. News Dataset에는 Lead 방법이 높은 성능을 가졌지만 WikiHow, Reddit (non-news dataset)에는 낮은 성능을 가지는 것을 확인할 수 있었다.
+      5. ![스크린샷 2022-03-13 오전 11 32 45](https://user-images.githubusercontent.com/48673702/158042362-2536b6bd-a4a4-4141-ac60-bdfdf40234a6.png)
 
+  3. Gap sentence의 비율에 대한 실험
+      1. 대체적으로 15% ~ 50%가 높은 성능을 가지는 것을 확인할 수 있다.
+      2. 각 Downstream Task에 따라서 최적의 비율이 다르다.
+      3. ![스크린샷 2022-03-13 오전 11 37 38](https://user-images.githubusercontent.com/48673702/158042483-ef03ecb0-b5a6-49a9-90a0-ba305fbda4be.png)  
+
+  4. MLM 
+      1. Gap Sentence를 30%로 선정하고 Masked token을 15%로 선정해서 모델을 학습
+      2. MLM & Ind-Orig 방법이 random과 비슷한 성능을 가지는 것을 확인할 수 있다.
+      3. 경험적으로 MLM이 pre-training 초기 checkpoint(100k ~ 200k)을 fine-tuning을 할 때 성능을 높여주는 것을 확인할 수 있었다.
+      4. 하지만 pre-training step(500k)이 많아질 수록 그 효과가 적어지는 것을 확인
+      5. 논문에서는 결과적으로 PEGASUS large 모델은 MLM을 사용하지 않았다.
+
+## 9. 실험 결과
 
 
 
