@@ -71,13 +71,11 @@
       * Hidden size : 768
       * Feedforward layer size : 3072
       * Attention Head map : 12
-      * Train Batch size : 256
   2. PEGASUS - Large
       * Layer : 16
       * Hidden size : 1024
       * Feedforward size : 4096
       * Attention Head map : 16
-      * Train Batch Size : 8192
 
  ## 8. Ablations on PEGASUS-base
   1. Pre-training Corpus 실험 결과
