@@ -45,12 +45,26 @@
           * 80% : [MASK2] token으로 변환  
           * 10% : random token으로 변환한다.
           * 10% : 변환하지 말고 그대로 둔다.  
-
+      2. 논문에서의 활용 방향
+          * GSG & MLM을 같이 활용해서 모델 학습을 진행 그러나 PEGASUS Large 모델을 학습할 때는 (많은 수의 pretraining steps를 학습) 할 때는 도움을 주지 못한 것으로 실험 결과가 나왔다.
+          * PEGASUS Large Model을 학습할 때는 GSG만을 사용해서 모델을 학습하였다.
 
 ## 4. Model Structure  
   ![ksnip_20220120-144831](https://user-images.githubusercontent.com/48673702/150281114-8934accd-622a-4892-a738-abf67545560b.png)
 
-## 5. Model size & hyperparameters
+## 5. Pre-training Corpus
+  1. C4 : 750G 정도의 웹 페이지 데이터
+  2. HugeNews : 3.8TB 정도의 뉴스, 블로그, 신문 및 크롤링 된 웹페이지 데이터
+  
+## 6. Downstream Tasks/Datasets
+  1. XSum : BBC 뉴스 데이터
+  2. CNN/Daily Mails : CNN, Daily 뉴스 데이터
+  3. NEWSROOM : 작가 혹은 에디터가 작성한 기사 요약 데이터셋
+  4. Gigaword : 뉴스 기사를 통해서 헤드라인을 생성하는 데이터셋
+  5. arXiv : 과학 publication의 body를 기반으로 abstract를 생성하는 데이터셋
+  6. 그 외 다양하게 존재
+
+## 7. Model size & hyperparameters
   1. PEGASUS - Base
       * Layer : 12
       * Hidden size : 768
@@ -68,4 +82,16 @@
       * Square root learning rate decay
       * Dropout : 0.1
 
+ ## 8. Ablations on PEGASUS-base
+  1. 실험 결과
+      1. C4 데이터셋을 학습한 모델보다 HugeNews를 학습한 모델이 XSum, CNN/DailyMail (뉴스 기사 요약 데이터셋) 에서 높은 성능을 가지는 것을 확인할 수 있었다.
+      2. 
+      
  
+    ![스크린샷 2022-03-13 오전 11 19 53](https://user-images.githubusercontent.com/48673702/158042067-a777bf1f-603b-49bf-b6c8-6c46c6adfbe0.png)
+
+
+
+
+
+
