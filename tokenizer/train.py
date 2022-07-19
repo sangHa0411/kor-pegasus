@@ -2,25 +2,19 @@ import os
 import random
 from transformers import PegasusTokenizerFast
 ## importing the tokenizer and subword BPE trainer
-from tokenizers import Tokenizer, pre_tokenizers
-from tokenizers.models import Unigram
-from tokenizers.trainers import UnigramTrainer
+from tokenizers import SentencePieceBPETokenizer, pre_tokenizers
 
 ## a pretokenizer to segment the text into words
-from tokenizers import decoders, Regex, normalizers, pre_tokenizers, processors, Tokenizer
+from tokenizers import decoders, Regex, normalizers, pre_tokenizers, processors
 
 """
 Reference 
     1. https://huggingface.co/course/chapter6/8?fw=pt#building-a-unigram-tokenizer-from-scratch
 """
 
-def prepare_tokenizer_trainer():
-    """
-    Prepares the tokenizer and trainer with unknown & special tokens.
-    """
-    unk_token = "<unk>"  # token for unknown words
+def prepare_tokenizer():
     spl_tokens = ["<cls>", "<sep>", "<unk>", "<pad>", "<mask_1>", "<mask_2>", "<s>", "</s>"]
-    tokenizer = Tokenizer(Unigram())
+    tokenizer = SentencePieceBPETokenizer()
     tokenizer.normalizer = normalizers.Sequence(
         [
             normalizers.Replace("``", '"'),
@@ -31,15 +25,12 @@ def prepare_tokenizer_trainer():
         ]
     )
     tokenizer.pre_tokenizer = pre_tokenizers.Metaspace()
-    trainer = UnigramTrainer(vocab_size=35000, unk_token= unk_token, special_tokens = spl_tokens)
-    return tokenizer, trainer
+
+    tokenizer.train(files, vocab_size=35000, min_frequency=3, special_tokens = spl_tokens)
+    return tokenizer
 
 def train_tokenizer(files):
-    """
-    Takes the files and trains the tokenizer.
-    """
-    tokenizer, trainer = prepare_tokenizer_trainer()
-    tokenizer.train(files, trainer) # training the tokenzier
+    tokenizer = prepare_tokenizer()
 
     cls_token_id = tokenizer.token_to_id("<cls>")
     sep_token_id = tokenizer.token_to_id("<sep>")
@@ -70,7 +61,6 @@ if __name__ == "__main__" :
 
     files = os.listdir("./documents")
     files = [os.path.join("./documents", f) for f in files if f.endswith(".txt")]
-    files = random.sample(files, 700)
     print("The number of files : %d" %len(files))
 
     tokenizer = train_tokenizer(files)
