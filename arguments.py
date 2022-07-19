@@ -39,6 +39,12 @@ class DataArguments:
 
 @dataclass
 class TrainingArguments:
+    seed: Optional[int] = field(
+        default=42,
+        metadata={
+            "help": "Random seed for initialization"
+        },
+    )
     batch_size: Optional[int] = field(
         default=256, 
         metadata={
@@ -54,31 +60,40 @@ class TrainingArguments:
     learning_rate: Optional[float] = field(
         default=1e-4,
         metadata={
-            "help:": "Learning rate"
+            "help": "Learning rate"
         }
     )
     warmup_ratio: Optional[float] = field(
         default=1e-2,
         metadata={
-            "help:": "Warmup ratio"
+            "help": "Warmup ratio"
         }
     )
     weight_decay: Optional[float] = field(
         default=1e-2,
         metadata={
-            "help:": "Weight decay"
+            "help": "Weight decay"
         }
     )
 
 @dataclass
 class LoggingArguments:
     dotenv_path: Optional[str] = field(
-        default="wandb.env", metadata={"help": "input your dotenv path"},
+        default="wandb.env", 
+        metadata={
+            "help": "input your dotenv path"
+        },
     )
     project_name: Optional[str] = field(
-        default="pegasus", metadata={"help": "project name"},
+        default="pegasus",
+         metadata={
+            "help": "project name"
+        },
     )
     group_name: Optional[str] = field(
-        default="base-model", metadata={"help": "group name"},
+        default="base-model", 
+        metadata={
+            "help": "group name"
+        },
     )
 

@@ -3,7 +3,6 @@ import os
 import sys
 import torch
 import random
-import argparse
 import pandas as pd
 import numpy as np
 import multiprocessing
@@ -45,15 +44,15 @@ def main():
     print(datasets)
 
     # -- Preprocessing datasets
-    print('\Preprocessing Datasets')
+    print('\nPreprocessing Datasets')
     preprocessor = Preprocessor()
     datasets = datasets.map(preprocessor, batched=True, num_proc=CPU_COUNT)
     print(datasets)
 
     # -- Encoding datasets
-    print('\Encoding Datasets')
-    tokenizer = PegasusTokenizerFast.from_pretrained(model_args.PLM, use_fast=True)
-    encoder = Encoder(tokenizer, data_args.max_input_len, data_args.max_target_len)
+    print('\nEncoding Datasets')
+    tokenizer = PegasusTokenizerFast.from_pretrained(model_args.PLM)
+    encoder = Encoder(tokenizer, data_args.max_input_length, data_args.max_target_length)
     datasets = datasets.map(encoder, 
         batched=True,
         num_proc=CPU_COUNT,
@@ -61,34 +60,52 @@ def main():
     )
     print(datasets)
 
+    # -- Configuration
+    config = PegasusConfig.from_pretrained(model_args.PLM)
+
     # -- Data Collator
-    data_collator = DataCollatorForSeq2Seq(tokenizer, padding=True, max_length=data_args.max_input_len, return_tensors="tf")
+    data_collator = DataCollatorForSeq2Seq(tokenizer, config=config, padding=True, max_length=data_args.max_input_length, return_tensors="tf")
 
     # -- Converting datasets type
     tf_datasets = datasets.to_tf_dataset(
-        columns=["attention_mask", "input_ids"],
+        columns=["attention_mask", "input_ids", "decoder_input_ids", "decoder_attention_mask"],
         label_cols=["labels"],
         shuffle=True,
         collate_fn=data_collator,
-        batch_size=training_args.train_batch_size,
+        batch_size=training_args.batch_size,
     )
-
-    # -- Configuration
-    config = PegasusConfig.from_pretrained(model_args.PLM)
 
     # -- Model
     print('\nLoading Model')
     def create_model():
-        input_ids = tf.keras.layers.Input(shape=(data_args.max_input_len,), dtype=tf.int32, name="input_ids")
-        attention_mask = tf.keras.layers.Input(shape=(data_args.max_input_len,), dtype=tf.int32, name="attention_mask")
-        decoder_input_ids = tf.keras.layers.Input(shape=(args.max_len,), dtype=tf.int32, name="attention_mask")
+        ## -- Model Inputs
+        input_ids = tf.keras.layers.Input(shape=(data_args.max_input_length,), dtype=tf.int32, name="input_ids")
+        attention_mask = tf.keras.layers.Input(shape=(data_args.max_input_length,), dtype=tf.int32, name="attention_mask")
+        decoder_input_ids = tf.keras.layers.Input(shape=(data_args.max_target_length,), dtype=tf.int32, name="decoder_input_ids")
+        decoder_attention_mask = tf.keras.layers.Input(shape=(data_args.max_target_length,), dtype=tf.int32, name="decoder_attention_mask")
 
+        ## -- Model
         summarization_model = TFPegasusForConditionalGeneration.from_pretrained(model_args.PLM, config=config, from_pt=True)
-        outputs = summarization_model(input_ids=input_ids, attention_mask = attention_mask, decoder_input_ids=decoder_input_ids)
 
-        model = tf.keras.Model(inputs=[input_ids, attention_mask], outputs=outputs)
+        ## -- Model Outputs
+        outputs = summarization_model(input_ids=input_ids, 
+            attention_mask = attention_mask, 
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask
+        )
+
+        ## -- Keras Model
+        model = tf.keras.Model(inputs=[input_ids, attention_mask, decoder_input_ids, decoder_attention_mask], outputs=outputs)
         return model
    
+    # -- Optmizer & Scheduler
+    total_steps = len(tf_datasets) * training_args.epochs
+    warmup_ratio = training_args.warmup_ratio
+    warmup_scheduler = LinearWarmupSchedule(total_steps, warmup_ratio, training_args.learning_rate)
+    optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
+
+    breakpoint()
+
     # -- Setting TPU
     resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='tpu')
     tf.config.experimental_connect_to_cluster(resolver)
@@ -98,15 +115,15 @@ def main():
     for i, cf in enumerate(tf.config.list_logical_devices('TPU')) :
         print("%dth devices: %s" %(i, cf))
 
-    # -- Optmizer & Scheduler
-    total_steps = len(tf_datasets) * training_args.epochs
-    warmup_ratio = training_args.warmup_ratio
-    warmup_scheduler = LinearWarmupSchedule(total_steps, warmup_ratio, training_args.learning_rate)
-    optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
-
     # -- Training
     strategy = tf.distribute.TPUStrategy(resolver)
 
+    """
+        todo list
+            1. SparseCategoricalCrossentropy with label_pad
+            2. accuracy with label_pad
+            3. wandb loggging
+    """
     with strategy.scope() :
         model = create_model()
         model.compile(optimizer=optimizer,
@@ -128,5 +145,5 @@ def seed_everything(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-if __name__ == '__main__':
+if __name__ == "__main__" :
     main()

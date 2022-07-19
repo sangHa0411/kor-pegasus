@@ -1,5 +1,4 @@
 
-
 class Encoder :
     def __init__(self, tokenizer, max_input_length, max_target_length) :
         self.tokenizer = tokenizer
@@ -12,13 +11,15 @@ class Encoder :
             padding="max_length",
             max_length=self.max_input_length, 
             return_token_type_ids=False, 
+            truncation=True
         )
 
-        with self.tokenizer.as_target_tokenizer():
+        with self.tokenizer.as_target_tokenizer() :
             labels = self.tokenizer(examples["summary"],
                 padding="max_length",
                 max_length=self.max_target_length, 
                 return_token_type_ids=False, 
+                truncation=True
             )
 
         model_inputs["labels"] = labels["input_ids"]
