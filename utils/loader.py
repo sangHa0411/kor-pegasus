@@ -1,37 +1,28 @@
 
-from datasets import load_dataset, concatenate_datasets
+import os 
+import json
+import pandas as pd
+from datasets import Dataset
 
 class DataLoader :
-    def __init__(self, seed, num_proc=4) :
+    def __init__(self, seed) :
         self.seed = seed
-        self.num_proc = num_proc
 
-    # for test
-    def load_data(self, api_key) :
-        data_list = []
+    def load(self, dir_path) :
+        documents = []
+        summaries = []
 
-        # newspaper
-        print('\nLoad Korean newspaper data')
-        for i in range(2) :
-            dataset_name = 'sh110495/kor_newspaper' + str(i+1)
-            dataset = load_dataset(dataset_name, use_auth_token=api_key)
-            dataset = dataset.remove_columns(['id', 'date', 'topic'])
-            data_list.append(dataset['train'])
+        files = os.listdir(dir_path)
+        files = [f for f in files if f.endswith(".json")]
 
-        # written language 
-        print('\nLoad Korean written language data')
-        for i in range(2) :
-            dataset_name = 'sh110495/kor-written-language' + str(i+1)
-            dataset = load_dataset(dataset_name, use_auth_token=api_key)
-            dataset = dataset.remove_columns(['id', 'date'])
-            data_list.append(dataset['train'])
+        for f in files :
+            f_path = os.path.join(dir_path, f)
+            with open(f_path, "r") as f :
+                dset = json.load(f)
 
-        # science, petition and etc
-        print('\nLoad Korean domain language')
-        dataset = load_dataset('sh110495/kor-domain-language', use_auth_token=api_key)
-        dataset = dataset.remove_columns(['id', 'type', 'date', 'title'])
-        data_list.append(dataset['train'])
+            documents.extend([d["document"] for d in dset])
+            summaries.extend([d["summary"] for d in dset])
 
-        total_data = concatenate_datasets(data_list)
-        total_data = total_data.shuffle(self.seed)
-        return total_data
+        df = pd.DataFrame({"document": documents, "summary": summaries})
+        dataset = Dataset.from_pandas(df)
+        return dataset.shuffle(self.seed)

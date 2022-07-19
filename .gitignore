@@ -1,2 +1,3 @@
-path.env
-kor-pegasus
+raw_dataset
+dataset
+wandb.env

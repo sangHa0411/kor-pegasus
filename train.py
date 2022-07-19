@@ -1,145 +1,123 @@
 
 import os
 import sys
+import torch
+import random
 import argparse
 import pandas as pd
 import numpy as np
-import random
-import torch
+import multiprocessing
+import tensorflow as tf
+import tensorflow_addons as tfa
 
 from utils.loader import DataLoader
-from utils.gsg import GapSentenceGeneration
-from utils.preprocessor import Filtering
+from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
-from utils.collator import DataCollatorForPegasus
+from utils.collator import DataCollatorForSeq2Seq
+
+from models.scheduler import LinearWarmupSchedule
 
 import wandb
 from dotenv import load_dotenv
 
-# from trainer import BucketingTrainer
-from models.model import PegasusForPretraining
-from transformers.trainer_utils import get_last_checkpoint
+from arguments import ModelArguments, DataArguments, TrainingArguments, LoggingArguments
 from transformers import (
-    Seq2SeqTrainer,
-    AutoConfig,
-    AutoTokenizer,
-    Seq2SeqTrainingArguments
+    PegasusConfig,
+    PegasusTokenizerFast,
+    TFPegasusForConditionalGeneration,
+    HfArgumentParser
 )
 
-def train(args):
-    # -- Device
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+def main():
 
-    # -- Checkpoint
-    model_checkpoint = args.PLM
-    
-    # -- Datasets
-    print('\nLoading Article Data')
-    api_key = os.getenv('HUGGINGFACE_KEY')
-    article_loader = DataLoader(seed=args.seed, num_proc=4)
-    datasets = article_loader.load_data(api_key=api_key)
-    print(datasets)
-
-    print('\nFiltering Too Long Text Data')
-    data_filter = Filtering(args.min_sen_size)
-    datasets = datasets.filter(data_filter)
-    print(datasets)
-
-    # -- Preprocessing
-    print('\nGenerating Gap Sentences Data')
-    gsg = GapSentenceGeneration(0.15)
-    datasets = datasets.map(gsg, 
-        batched=True,
-        num_proc=4,
-        load_from_cache_file=True,
-        remove_columns = datasets.column_names
+    parser = HfArgumentParser(
+        (ModelArguments, DataArguments, TrainingArguments, LoggingArguments)
     )
+    model_args, data_args, training_args, logging_args = parser.parse_args_into_dataclasses()
+    seed_everything(training_args.seed)
+
+    CPU_COUNT = multiprocessing.cpu_count() // 2
+
+    # -- Loading datasets
+    print('\nLoading Datasets')
+    data_loader = DataLoader(seed=training_args.seed)
+    datasets = data_loader.load(data_args.dir_path)
     print(datasets)
 
-    # -- Tokenizing
-    print('\nTokenizing')
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, use_fast=True)
-    encoder = Encoder(tokenizer, args.max_input_len, args.max_target_len)
+    # -- Preprocessing datasets
+    print('\Preprocessing Datasets')
+    preprocessor = Preprocessor()
+    datasets = datasets.map(preprocessor, batched=True, num_proc=CPU_COUNT)
+    print(datasets)
+
+    # -- Encoding datasets
+    print('\Encoding Datasets')
+    tokenizer = PegasusTokenizerFast.from_pretrained(model_args.PLM, use_fast=True)
+    encoder = Encoder(tokenizer, data_args.max_input_len, data_args.max_target_len)
     datasets = datasets.map(encoder, 
         batched=True,
-        num_proc=4,
-        load_from_cache_file=True,
+        num_proc=CPU_COUNT,
         remove_columns = datasets.column_names
     )
     print(datasets)
 
+    # -- Data Collator
+    data_collator = DataCollatorForSeq2Seq(tokenizer, padding=True, max_length=data_args.max_input_len, return_tensors="tf")
+
+    # -- Converting datasets type
+    tf_datasets = datasets.to_tf_dataset(
+        columns=["attention_mask", "input_ids"],
+        label_cols=["labels"],
+        shuffle=True,
+        collate_fn=data_collator,
+        batch_size=training_args.train_batch_size,
+    )
+
     # -- Configuration
-    config = AutoConfig.from_pretrained(model_checkpoint)
+    config = PegasusConfig.from_pretrained(model_args.PLM)
 
     # -- Model
     print('\nLoading Model')
-    model = PegasusForPretraining.from_pretrained(model_checkpoint, config=config).to(device)
-    print('Model Type : {}'.format(type(model)))
+    def create_model():
+        input_ids = tf.keras.layers.Input(shape=(data_args.max_input_len,), dtype=tf.int32, name="input_ids")
+        attention_mask = tf.keras.layers.Input(shape=(data_args.max_input_len,), dtype=tf.int32, name="attention_mask")
+        decoder_input_ids = tf.keras.layers.Input(shape=(args.max_len,), dtype=tf.int32, name="attention_mask")
 
-    training_args = Seq2SeqTrainingArguments(
-        output_dir = args.output_dir,                                           # output directory
-        logging_dir = args.logging_dir,                                         # logging directory
-        num_train_epochs = args.epochs,                                         # training epochs
-        save_strategy = 'steps',                                                # save strategy
-        save_steps = 5000,                                                      # save steps
-        logging_strategy = 'steps',                                             # logging strategy
-        logging_steps = 1000,                                                   # logging steps                                         
-        per_device_train_batch_size = args.train_batch_size,                    # train batch size
-        warmup_steps=args.warmup_steps,                                         # warmup steps
-        weight_decay=args.weight_decay,                                         # weight decay
-        learning_rate = args.learning_rate,                                     # learning rate
-        gradient_accumulation_steps=args.gradient_accumulation_steps,           # gradients accumulation steps
-        fp16=True if args.fp16 == 1 else False,                                 # fp 16 flag
-        overwrite_output_dir=True if args.overwrite_output_dir == 1 else False
-    )
+        summarization_model = TFPegasusForConditionalGeneration.from_pretrained(model_args.PLM, config=config, from_pt=True)
+        outputs = summarization_model(input_ids=input_ids, attention_mask = attention_mask, decoder_input_ids=decoder_input_ids)
 
-    # -- Collator
-    data_collator = DataCollatorForPegasus(tokenizer=tokenizer, 
-        model=model,
-        mlm=True, 
-        mlm_probability=0.15
-    )
+        model = tf.keras.Model(inputs=[input_ids, attention_mask], outputs=outputs)
+        return model
+   
+    # -- Setting TPU
+    resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='tpu')
+    tf.config.experimental_connect_to_cluster(resolver)
+    tf.tpu.experimental.initialize_tpu_system(resolver)
 
-    # -- Trainer
-    training_args.size_gap = args.bucketting_size_gap
-    trainer = Seq2SeqTrainer(
-        model,
-        training_args,
-        train_dataset=datasets,
-        data_collator=data_collator,
-        tokenizer=tokenizer,
-    )
+    # -- Checking TPU Devices
+    for i, cf in enumerate(tf.config.list_logical_devices('TPU')) :
+        print("%dth devices: %s" %(i, cf))
+
+    # -- Optmizer & Scheduler
+    total_steps = len(tf_datasets) * training_args.epochs
+    warmup_ratio = training_args.warmup_ratio
+    warmup_scheduler = LinearWarmupSchedule(total_steps, warmup_ratio, training_args.learning_rate)
+    optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
 
     # -- Training
-    print('\nTraining')
-    if os.path.isdir(args.output_dir):
-        last_checkpoint = None
-        if args.overwrite_output_dir == False :
-            last_checkpoint = get_last_checkpoint(args.output_dir)
+    strategy = tf.distribute.TPUStrategy(resolver)
 
-        train_result = trainer.train(resume_from_checkpoint=last_checkpoint)
-    else :
-        train_result = trainer.train()
+    with strategy.scope() :
+        model = create_model()
+        model.compile(optimizer=optimizer,
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            # metrics=["accuracy"]
+        )
 
-    print("Train result: ", train_result)
-    trainer.save_model()
-        
-
-def main(args):
-    load_dotenv(dotenv_path=args.dotenv_path)
-    WANDB_AUTH_KEY = os.getenv('WANDB_KEY')
-    wandb.login(key=WANDB_AUTH_KEY)
-
-    wandb_name = f"pretraining day1"
-    wandb.init(
-        entity="sangha0411",
-        project="PEGASUS pretrainging", 
-        name=wandb_name,
-        group='pegasus')
-
-    wandb.config.update(args)
-    train(args)
-    wandb.finish()
+    model.fit(tf_datasets, 
+        epochs=training_args.epochs, 
+        verbose=1,
+    )
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -151,39 +129,4 @@ def seed_everything(seed):
     random.seed(seed)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    # -- Directory
-    parser.add_argument('--output_dir', default='./results', help='model save at {SM_SAVE_DIR}/{name}')
-    parser.add_argument('--logging_dir', default='./logs', help='logging save at {SM_SAVE_DIR}/{name}')
-
-    # -- Model
-    parser.add_argument('--PLM', type=str, default='sh110495/kor-pegasus', help='model type (default: sh110495/kor-pegasus)')
-
-    # -- Training
-    parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train (default: 10)')
-    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate (default: 1e-4)')
-    parser.add_argument('--train_batch_size', type=int, default=2, help='train batch size (default: 2)')
-    parser.add_argument('--min_sen_size', type=int, default=5, help='min sentence size (default: 5)')
-    parser.add_argument('--bucketting_size_gap', type=int, default=16, help='bucketting_size_gap (default: 16)')
-    parser.add_argument('--warmup_steps', type=int, default=20000, help='number of warmup steps for learning rate scheduler (default: 20000)')
-    parser.add_argument('--weight_decay', type=float, default=1e-2, help='streng1th of weight decay (default: 1e-2)')
-    parser.add_argument('--gradient_accumulation_steps', type=int, default=16, help='gradient_accumulation_steps of training (default: 16)')
-    parser.add_argument('--fp16', type=int, default=0, help='using fp16 (default: 0)')
-    parser.add_argument('--overwrite_output_dir', type=int, default=0, help='overwriting output directory')
-
-    # -- Data
-    parser.add_argument('--max_input_len', type=int, default=2048, help='max length of tokenized document (default: 2048)')
-    parser.add_argument('--max_target_len', type=int, default=512, help='max length of tokenized summary (default: 512)')
-
-    # -- Seed
-    parser.add_argument('--seed', type=int, default=42, help='random seed (default: 42)')
-
-    # -- Wandb
-    parser.add_argument('--dotenv_path', default='./path.env', help='input your dotenv path')
-
-    args = parser.parse_args()
-
-    seed_everything(args.seed)   
-    main(args)
-
+    main()
