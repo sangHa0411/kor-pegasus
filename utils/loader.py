@@ -3,6 +3,7 @@ import os
 import json
 import pandas as pd
 from datasets import Dataset
+from tqdm import tqdm
 
 class DataLoader :
     def __init__(self, seed) :
@@ -15,7 +16,7 @@ class DataLoader :
         files = os.listdir(dir_path)
         files = [f for f in files if f.endswith(".json")]
 
-        for f in files :
+        for f in tqdm(files) :
             f_path = os.path.join(dir_path, f)
             with open(f_path, "r") as f :
                 dset = json.load(f)

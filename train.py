@@ -14,6 +14,8 @@ from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
 from utils.collator import DataCollatorForSeq2Seq
 
+from models.metrics import get_accuracy
+from models.loss import SparseCategoricalCrossentropy
 from models.scheduler import LinearWarmupSchedule
 
 import wandb
@@ -64,7 +66,7 @@ def main():
     config = PegasusConfig.from_pretrained(model_args.PLM)
 
     # -- Data Collator
-    data_collator = DataCollatorForSeq2Seq(tokenizer, config=config, padding=True, max_length=data_args.max_input_length, return_tensors="tf")
+    data_collator = DataCollatorForSeq2Seq(tokenizer, padding=True, max_length=data_args.max_input_length, return_tensors="tf")
 
     # -- Converting datasets type
     tf_datasets = datasets.to_tf_dataset(
@@ -92,43 +94,34 @@ def main():
             attention_mask = attention_mask, 
             decoder_input_ids=decoder_input_ids,
             decoder_attention_mask=decoder_attention_mask
-        )
+        )["logits"]
 
         ## -- Keras Model
         model = tf.keras.Model(inputs=[input_ids, attention_mask, decoder_input_ids, decoder_attention_mask], outputs=outputs)
         return model
    
-    # -- Optmizer & Scheduler
+    # -- Loss & Optmizer & Scheduler
+    ce_loss = SparseCategoricalCrossentropy(tokenizer, label_pad_token_id=-100)
     total_steps = len(tf_datasets) * training_args.epochs
-    warmup_ratio = training_args.warmup_ratio
-    warmup_scheduler = LinearWarmupSchedule(total_steps, warmup_ratio, training_args.learning_rate)
+    warmup_scheduler = LinearWarmupSchedule(total_steps, training_args.warmup_ratio, training_args.learning_rate)
     optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
-
-    breakpoint()
 
     # -- Setting TPU
     resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='tpu')
     tf.config.experimental_connect_to_cluster(resolver)
-    tf.tpu.experimental.initialize_tpu_system(resolver)
 
+    tf.tpu.experimental.initialize_tpu_system(resolver)
     # -- Checking TPU Devices
     for i, cf in enumerate(tf.config.list_logical_devices('TPU')) :
         print("%dth devices: %s" %(i, cf))
 
     # -- Training
     strategy = tf.distribute.TPUStrategy(resolver)
-
-    """
-        todo list
-            1. SparseCategoricalCrossentropy with label_pad
-            2. accuracy with label_pad
-            3. wandb loggging
-    """
     with strategy.scope() :
         model = create_model()
         model.compile(optimizer=optimizer,
-            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-            # metrics=["accuracy"]
+            loss=ce_loss,
+            metrics=[get_accuracy]
         )
 
     model.fit(tf_datasets, 
