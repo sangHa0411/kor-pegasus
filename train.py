@@ -9,10 +9,9 @@ import multiprocessing
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-from utils.loader import DataLoader
+from utils.loader import DataLoader, get_tf_datasets
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
-from utils.collator import DataCollatorForSeq2Seq
 
 from models.metrics import get_accuracy
 from models.loss import SparseCategoricalCrossentropy
@@ -65,18 +64,6 @@ def main():
     # -- Configuration
     config = PegasusConfig.from_pretrained(model_args.PLM)
 
-    # -- Data Collator
-    data_collator = DataCollatorForSeq2Seq(tokenizer, padding=True, max_length=data_args.max_input_length, return_tensors="tf")
-
-    # -- Converting datasets type
-    tf_datasets = datasets.to_tf_dataset(
-        columns=["attention_mask", "input_ids", "decoder_input_ids", "decoder_attention_mask"],
-        label_cols=["labels"],
-        shuffle=True,
-        collate_fn=data_collator,
-        batch_size=training_args.batch_size,
-    )
-
     # -- Model
     print('\nLoading Model')
     def create_model():
@@ -100,12 +87,6 @@ def main():
         model = tf.keras.Model(inputs=[input_ids, attention_mask, decoder_input_ids, decoder_attention_mask], outputs=outputs)
         return model
    
-    # -- Loss & Optmizer & Scheduler
-    ce_loss = SparseCategoricalCrossentropy(tokenizer, label_pad_token_id=-100)
-    total_steps = len(tf_datasets) * training_args.epochs
-    warmup_scheduler = LinearWarmupSchedule(total_steps, training_args.warmup_ratio, training_args.learning_rate)
-    optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
-
     # -- Setting TPU
     resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='tpu')
     tf.config.experimental_connect_to_cluster(resolver)
@@ -117,11 +98,18 @@ def main():
 
     # -- Training
     strategy = tf.distribute.TPUStrategy(resolver)
+    tf_datasets = get_tf_datasets(datasets, training_args.batch_size)
+
     with strategy.scope() :
         model = create_model()
-        model.compile(optimizer=optimizer,
-            loss=ce_loss,
-            metrics=[get_accuracy]
+
+        steps_per_epoch = int(len(datasets) / training_args.batch_size)
+        total_steps = steps_per_epoch * training_args.epochs
+        warmup_scheduler = LinearWarmupSchedule(total_steps, training_args.warmup_ratio, training_args.learning_rate)
+        optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
+
+        model.compile(optimizer=optimizer, 
+            loss=SparseCategoricalCrossentropy(tokenizer),
         )
 
     model.fit(tf_datasets, 
