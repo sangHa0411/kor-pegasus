@@ -1,6 +1,7 @@
 __pycache__
 raw_dataset
 dataset
+wandb
 wandb.env
 *.ipynb
 *.txt

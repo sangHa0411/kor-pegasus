@@ -1,21 +1,12 @@
-
-import os
-import sys
 import torch
 import random
-import pandas as pd
 import numpy as np
-import multiprocessing
 import tensorflow as tf
-
 
 from utils.loader import DataLoader
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
 from trainer import Trainer
-
-import wandb
-from dotenv import load_dotenv
 
 from arguments import ModelArguments, DataArguments, TrainingArguments, LoggingArguments
 from transformers import (
@@ -33,7 +24,7 @@ def main():
     model_args, data_args, training_args, logging_args = parser.parse_args_into_dataclasses()
     seed_everything(training_args.seed)
 
-    CPU_COUNT = multiprocessing.cpu_count() // 2
+    CPU_COUNT = 8
 
     # -- Loading datasets
     print('\nLoading Datasets')
@@ -87,6 +78,7 @@ def main():
     # -- Trainer
     trainer = Trainer(
         args=training_args,
+        logging_args=logging_args,
         model_create_fn=create_model,
         tokenizer=tokenizer,
         datasets=datasets,

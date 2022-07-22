@@ -1,14 +1,19 @@
-
+import os
+import wandb
 import tensorflow as tf
 import tensorflow_addons as tfa
-from models.scheduler import LinearWarmupSchedule
-from models.loss import SparseCategoricalCrossentropy
+from tqdm import tqdm
+from dotenv import load_dotenv
+
 from models.metrics import Accuracy
+from models.scheduler import LinearWarmupSchedule
+
 
 class Trainer :
 
-    def __init__(self, args, model_create_fn, tokenizer, datasets, tpu_name) :
+    def __init__(self, args, logging_args, model_create_fn, tokenizer, datasets, tpu_name) :
         self.args = args
+        self.logging_args = logging_args
         self.model_create_fn = model_create_fn
         self.tokenizer = tokenizer
         self.datasets = datasets
@@ -25,6 +30,7 @@ class Trainer :
         optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=self.args.weight_decay)
 
         return optimizer
+
 
     def get_tf_datasets(self, datasets, batch_size) :
         input_ids = datasets["input_ids"]
@@ -44,26 +50,6 @@ class Trainer :
         tf_datasets = tf.data.Dataset.zip((input_tensors, label_tensors))
         return tf_datasets
 
-    def train_keras(self) :
-        # -- Setting TPU
-        resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=self.tpu_name)
-        tf.config.experimental_connect_to_cluster(resolver)
-        tf.tpu.experimental.initialize_tpu_system(resolver)
-
-        # -- Training
-        strategy = tf.distribute.TPUStrategy(resolver)
-        tf_datasets = self.get_tf_datasets(self.datasets, self.args.batch_size)
-
-        with strategy.scope() :
-            model = self.model_create_fn()
-
-            optimizer = self.get_optimizer()
-            model.compile(optimizer=optimizer, 
-                loss=SparseCategoricalCrossentropy(self.tokenizer),
-                metrics=[Accuracy(self.tokenizer)]
-            )
-
-        model.fit(tf_datasets, epochs=self.args.epochs, verbose=1)
 
     def train(self) :
         # -- Setting TPU
@@ -71,14 +57,13 @@ class Trainer :
         tf.config.experimental_connect_to_cluster(resolver)
         tf.tpu.experimental.initialize_tpu_system(resolver)
 
-        # -- Training
+        # -- Strategy
         strategy = tf.distribute.TPUStrategy(resolver)
 
         with strategy.scope():
             model = self.model_create_fn()
             optimizer = self.get_optimizer()
 
-            # loss_fn = SparseCategoricalCrossentropy(self.tokenizer)
             training_loss = tf.keras.metrics.Mean('training_loss', dtype=tf.float32)
             training_accuracy = Accuracy("training_acc", self.tokenizer)
 
@@ -87,6 +72,9 @@ class Trainer :
             lambda _: self.get_tf_datasets(self.datasets, batch_size=per_replica_batch_size)
         )
 
+        TPU_NUM = len(tf.config.list_logical_devices('TPU'))
+
+        # -- Training function
         @tf.function
         def train_step(iterator):
             """The step function for one training step."""
@@ -98,7 +86,7 @@ class Trainer :
                         labels, logits, from_logits=True)
 
                     loss = tf.where(labels==self.tokenizer.pad_token_id, 0.0, loss)
-                    loss = tf.reduce_mean(loss)
+                    loss = tf.reduce_mean(loss) / TPU_NUM
                 
                 grads = tape.gradient(loss, model.trainable_variables)
                 optimizer.apply_gradients(list(zip(grads, model.trainable_variables)))
@@ -108,21 +96,79 @@ class Trainer :
 
             strategy.run(step_fn, args=(next(iterator),))
 
+        # -- Training Steps
         steps_per_epoch = int(len(self.datasets) / self.args.batch_size)
+        total_steps = steps_per_epoch * self.args.epochs
+
         train_iterator = iter(tf_datasets)
-        for epoch in range(self.args.epochs):
-            print('Epoch: {}/{}'.format(epoch, self.args.epochs))
+        progress_bar = tqdm(range(total_steps))
 
-            for step in range(steps_per_epoch):
-                train_step(train_iterator)
+        # -- Wandb Setting
+        load_dotenv(dotenv_path=self.logging_args.dotenv_path)
+        WANDB_AUTH_KEY = os.getenv('WANDB_AUTH_KEY')
+        wandb.login(key=WANDB_AUTH_KEY)
 
-                cur_step = optimizer.iterations.numpy()
-                step_loss = round(float(training_loss.result()),4)
-                step_acc = round(float(training_accuracy.result()),4)
+        wandb.init(entity="sangha0411", 
+            project=self.logging_args.project_name,
+            name=self.logging_args.run_name,
+            group=self.logging_args.group_name,
+        )
+        wandb.config.update(self.args)
 
-                print('Current step: {}, training loss: {}, accuracy: {}%'.format(
-                    cur_step, step_loss, step_acc)
-                )
+        # -- Training loop
+        print("\nTraining")
+        for step in progress_bar :
+            progress_bar.set_description("{}/{}".format(step, total_steps))  
+            train_step(train_iterator)
 
-            training_loss.reset_states()
-            training_accuracy.reset_states()
+            cur_step = optimizer.iterations.numpy()
+            # -- Logging to wandb
+            if cur_step % self.args.logging_steps == 0 :
+                cur_info = {
+                    "loss" : round(float(training_loss.result()), 4),
+                    "step" : cur_step ,
+                    "accuracy" : round(float(training_accuracy.result()), 4),
+                    "learning_rate" : round(float(optimizer.learning_rate.get_config()["learning_rate"]), 4)
+                }
+                self.log(cur_info)
+
+            # -- Save checkpoint
+            if cur_step % self.args.save_steps == 0 :
+                training_loss.reset_states()
+                training_accuracy.reset_states()
+
+                self.save_model(model, cur_step)
+        
+        wandb.finish()
+
+
+    def save_model(self, model, cur_step) :
+        checkpoints = os.listdir(self.args.save_path)
+
+        LIMIT = self.args.save_total_limit
+        if len(checkpoints) > LIMIT :
+            checkpoints = sorted(checkpoints)
+            target = os.path.join(self.args.save_path, checkpoints[0])
+
+            print("\nRemoving {}".format(target))
+
+        save_path = os.path.join(self.args.save_path, "checkpoints-{}.h5".format(cur_step))
+        print("Saving {}\n".format(save_path))
+        model.save(save_path)
+
+
+    def log(self, info) :
+        cur_step = info["step"]
+        cur_loss = info["loss"]
+        cur_accuracy = info["accuracy"]
+        cur_learning_rate = info["learning_rate"]
+
+        print("Current step: {}, training loss: {}, accuracy: {}% Learning Rate {}".format(
+            cur_step, cur_loss, cur_accuracy, cur_learning_rate)
+        )
+
+        wandb.log({"train_loss" : cur_loss, 
+            "train_accuracy" : cur_accuracy,
+            "train_learning_rate": cur_learning_rate}, 
+            step=cur_step
+        )

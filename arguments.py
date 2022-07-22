@@ -9,12 +9,6 @@ class ModelArguments:
             "help": "Path to pretrained model or model identifier from huggingface.co/models"
         },
     )
-    save_path: str = field(
-        default="checkpoints", 
-        metadata={
-            "help": "Path to save checkpoint from fine tune model"
-        },
-    )
  
 @dataclass
 class DataArguments:
@@ -75,16 +69,28 @@ class TrainingArguments:
             "help": "Weight decay"
         }
     )
-    max_steps: Optional[int] = field(
-        default=-1,
-        metadata={
-            "help": "Max training steps"
-        }
-    )
     save_steps: Optional[int] = field(
-        default=10000,
+        default=200,
         metadata={
             "help": "Save steps during training"
+        }
+    )
+    logging_steps: Optional[int] = field(
+        default=100,
+        metadata={
+            "help": "Logging steps during training"
+        }
+    )
+    save_path: Optional[str] = field(
+        default="checkpoints",
+        metadata={
+            "help": "Path to save checkpoint from fine tune model"
+        }
+    )
+    save_total_limit: Optional[int] = field(
+        default=5,
+        metadata={
+            "help": "Total checkpoints during training"
         }
     )
 
@@ -97,15 +103,21 @@ class LoggingArguments:
         },
     )
     project_name: Optional[str] = field(
-        default="pegasus",
+        default="kor-pegasus",
          metadata={
             "help": "project name"
         },
     )
     group_name: Optional[str] = field(
-        default="base-model", 
+        default="pretraining", 
         metadata={
             "help": "group name"
+        },
+    )
+    run_name: Optional[str] = field(
+        default="base-model", 
+        metadata={
+            "help": "wandb name"
         },
     )
 
