@@ -117,6 +117,13 @@ class Trainer :
 
         # -- Training loop
         print("\nTraining")
+        print("The number of data : %d" %len(self.datasets))
+        print("Training Batch Size : %d" %self.args.batch_size)
+        print("Total Steps : %d" %total_steps)
+        print("The number of training epochs : %d" %self.args.epochs)
+        print("Training steps per epoch : %d" %self.args.epochs)
+        print("Training steps per epoch : %d" %steps_per_epoch)
+        print("The number of TPU cores : %d" %TPU_NUM)
         for step in progress_bar :
             progress_bar.set_description("{}/{}".format(step, total_steps))  
             train_step(train_iterator)
@@ -138,6 +145,8 @@ class Trainer :
 
                 self.save_model(model, cur_step)
         
+        # -- Save final checkpoint
+        self.save_model(model, cur_step)
         wandb.finish()
 
 

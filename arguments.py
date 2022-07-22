@@ -30,6 +30,12 @@ class DataArguments:
             "help": "Path to dataset"
         }
     )
+    shard_size: Optional[int] = field(
+        default=8, 
+        metadata={
+            "help": "The number of shards"
+        },
+    )
 
 @dataclass
 class TrainingArguments:
