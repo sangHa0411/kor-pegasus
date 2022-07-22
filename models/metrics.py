@@ -1,16 +1,25 @@
 
 import tensorflow as tf
 
-def get_accuracy(y_true, y_pred):
-    y_true = tf.cast(y_true, tf.int32)
-    y_pred_arg = tf.cast(tf.math.argmax(y_pred, axis=-1), tf.int32)
+class Accuracy(tf.keras.metrics.Metric) :
 
-    total_tokens = tf.where(y_true == -100, 0.0, 1.0)
-    total_size = tf.reduce_sum(total_tokens)
+    def __init__(self, tokenizer) :
+        super(Accuracy, self).__init__()
+        self.tokenizer = tokenizer
+        self.acc = self.add_weight(name='acc', initializer='zeros')
 
-    correct_tokens = tf.where(y_true == y_pred_arg, 1.0, 0.0)
-    correct_tokens = tf.where(y_true == -100, 0.0, correct_tokens)
-    correct_size = tf.reduce_sum(correct_tokens)
+    def update_state(self, y_true, y_pred, sample_weight=None) :
+        y_true = tf.cast(y_true, tf.int32)
+        
+        y_pred_arg = tf.cast(tf.math.argmax(y_pred, axis=-1), tf.int32)
+        total_tokens = tf.where(y_true == self.tokenizer.pad_token_id, 0.0, 1.0)
+        total_size = tf.reduce_sum(total_tokens)
 
-    acc = correct_size / total_size
-    return acc
+        correct_tokens = tf.where(y_true == y_pred_arg, 1.0, 0.0)
+        correct_tokens = tf.where(y_true == self.tokenizer.pad_token_id, 0.0, correct_tokens)
+        correct_size = tf.reduce_sum(correct_tokens)
+
+        self.acc.assign_add(correct_size / total_size)
+
+    def result(self) :
+        return self.acc

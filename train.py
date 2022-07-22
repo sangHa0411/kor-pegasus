@@ -13,7 +13,7 @@ from utils.loader import DataLoader, get_tf_datasets
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
 
-from models.metrics import get_accuracy
+from models.metrics import Accuracy
 from models.loss import SparseCategoricalCrossentropy
 from models.scheduler import LinearWarmupSchedule
 
@@ -110,6 +110,7 @@ def main():
 
         model.compile(optimizer=optimizer, 
             loss=SparseCategoricalCrossentropy(tokenizer),
+            metrics=[Accuracy(tokenizer)]
         )
 
     model.fit(tf_datasets, 
