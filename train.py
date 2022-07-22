@@ -7,15 +7,12 @@ import pandas as pd
 import numpy as np
 import multiprocessing
 import tensorflow as tf
-import tensorflow_addons as tfa
 
-from utils.loader import DataLoader, get_tf_datasets
+
+from utils.loader import DataLoader
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
-
-from models.metrics import Accuracy
-from models.loss import SparseCategoricalCrossentropy
-from models.scheduler import LinearWarmupSchedule
+from trainer import Trainer
 
 import wandb
 from dotenv import load_dotenv
@@ -87,36 +84,17 @@ def main():
         model = tf.keras.Model(inputs=[input_ids, attention_mask, decoder_input_ids, decoder_attention_mask], outputs=outputs)
         return model
    
-    # -- Setting TPU
-    resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='tpu')
-    tf.config.experimental_connect_to_cluster(resolver)
-
-    tf.tpu.experimental.initialize_tpu_system(resolver)
-    # -- Checking TPU Devices
-    for i, cf in enumerate(tf.config.list_logical_devices('TPU')) :
-        print("%dth devices: %s" %(i, cf))
+    # -- Trainer
+    trainer = Trainer(
+        args=training_args,
+        model_create_fn=create_model,
+        tokenizer=tokenizer,
+        datasets=datasets,
+        tpu_name="tpu"
+    )
 
     # -- Training
-    strategy = tf.distribute.TPUStrategy(resolver)
-    tf_datasets = get_tf_datasets(datasets, training_args.batch_size)
-
-    with strategy.scope() :
-        model = create_model()
-
-        steps_per_epoch = int(len(datasets) / training_args.batch_size)
-        total_steps = steps_per_epoch * training_args.epochs
-        warmup_scheduler = LinearWarmupSchedule(total_steps, training_args.warmup_ratio, training_args.learning_rate)
-        optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=training_args.weight_decay)
-
-        model.compile(optimizer=optimizer, 
-            loss=SparseCategoricalCrossentropy(tokenizer),
-            metrics=[Accuracy(tokenizer)]
-        )
-
-    model.fit(tf_datasets, 
-        epochs=training_args.epochs, 
-        verbose=1,
-    )
+    trainer.train()
 
 def seed_everything(seed):
     torch.manual_seed(seed)

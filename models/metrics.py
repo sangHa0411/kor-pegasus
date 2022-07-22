@@ -3,8 +3,8 @@ import tensorflow as tf
 
 class Accuracy(tf.keras.metrics.Metric) :
 
-    def __init__(self, tokenizer) :
-        super(Accuracy, self).__init__()
+    def __init__(self, name, tokenizer, **kwargs) :
+        super(Accuracy, self).__init__(name, **kwargs)
         self.tokenizer = tokenizer
         self.acc = self.add_weight(name='acc', initializer='zeros')
 

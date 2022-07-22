@@ -75,6 +75,18 @@ class TrainingArguments:
             "help": "Weight decay"
         }
     )
+    max_steps: Optional[int] = field(
+        default=-1,
+        metadata={
+            "help": "Max training steps"
+        }
+    )
+    save_steps: Optional[int] = field(
+        default=10000,
+        metadata={
+            "help": "Save steps during training"
+        }
+    )
 
 @dataclass
 class LoggingArguments:
