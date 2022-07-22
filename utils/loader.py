@@ -17,9 +17,6 @@ class DataLoader :
 
         files = os.listdir(dir_path)
         files = [f for f in files if f.endswith(".json")]
-        
-        # For debugging
-        files = [files[0]]
 
         for f in tqdm(files) :
             f_path = os.path.join(dir_path, f)

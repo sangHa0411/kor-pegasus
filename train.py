@@ -17,7 +17,6 @@ from transformers import (
 )
 
 def main():
-
     parser = HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments, LoggingArguments)
     )

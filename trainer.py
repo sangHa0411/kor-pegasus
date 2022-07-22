@@ -128,7 +128,6 @@ class Trainer :
                     "loss" : round(float(training_loss.result()), 4),
                     "step" : cur_step ,
                     "accuracy" : round(float(training_accuracy.result()), 4),
-                    "learning_rate" : round(float(optimizer.learning_rate.get_config()["learning_rate"]), 4)
                 }
                 self.log(cur_info)
 
@@ -161,14 +160,12 @@ class Trainer :
         cur_step = info["step"]
         cur_loss = info["loss"]
         cur_accuracy = info["accuracy"]
-        cur_learning_rate = info["learning_rate"]
 
-        print("Current step: {}, training loss: {}, accuracy: {}% Learning Rate {}".format(
-            cur_step, cur_loss, cur_accuracy, cur_learning_rate)
+        print("Current step: {}, training loss: {}, accuracy: {}%".format(
+            cur_step, cur_loss, cur_accuracy)
         )
 
-        wandb.log({"train_loss" : cur_loss, 
-            "train_accuracy" : cur_accuracy,
-            "train_learning_rate": cur_learning_rate}, 
+        wandb.log({"train/loss" : cur_loss, 
+            "train/accuracy" : cur_accuracy}, 
             step=cur_step
         )
