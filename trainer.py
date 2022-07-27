@@ -4,7 +4,6 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 from tqdm import tqdm
 from dotenv import load_dotenv
-
 from models.metrics import Accuracy
 from models.scheduler import LinearWarmupSchedule
 
@@ -101,7 +100,6 @@ class Trainer :
         total_steps = steps_per_epoch * self.args.epochs
 
         train_iterator = iter(tf_datasets)
-        progress_bar = tqdm(range(total_steps))
 
         # -- Wandb Setting
         load_dotenv(dotenv_path=self.logging_args.dotenv_path)
@@ -121,9 +119,10 @@ class Trainer :
         print("Training Batch Size : %d" %self.args.batch_size)
         print("Total Steps : %d" %total_steps)
         print("The number of training epochs : %d" %self.args.epochs)
-        print("Training steps per epoch : %d" %self.args.epochs)
         print("Training steps per epoch : %d" %steps_per_epoch)
         print("The number of TPU cores : %d" %TPU_NUM)
+        
+        progress_bar = tqdm(range(total_steps))
         for step in progress_bar :
             progress_bar.set_description("{}/{}".format(step, total_steps))  
             train_step(train_iterator)

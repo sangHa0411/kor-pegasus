@@ -8,16 +8,15 @@ from datasets import Dataset
 from tqdm import tqdm
 
 class DataLoader :
-    def __init__(self, seed, shard_size) :
+    def __init__(self, seed) :
         self.seed = seed
-        self.shard_size = shard_size
 
     def load(self, dir_path) :
         documents = []
         summaries = []
 
         files = os.listdir(dir_path)
-        files = [f for f in files if f.endswith(".json")][:10]
+        files = [f for f in files if f.endswith(".json")]
 
         for f in tqdm(files) :
             f_path = os.path.join(dir_path, f)
@@ -28,6 +27,5 @@ class DataLoader :
             summaries.extend([d["summary"] for d in dset])
 
         df = pd.DataFrame({"document": documents, "summary": summaries})
-        dataset = Dataset.from_pandas(df).shuffle(self.seed)
-        dataset = [dataset.shard(num_shards=self.shard_size, index=i) for i in range(self.shard_size)]
-        return dataset
+        dataset = Dataset.from_pandas(df)
+        return dataset.shuffle(self.seed)

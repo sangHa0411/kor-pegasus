@@ -3,7 +3,7 @@ import random
 import numpy as np
 import tensorflow as tf
 
-from datasets import concatenate_datasets
+from datasets import load_dataset
 from utils.loader import DataLoader
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
@@ -27,26 +27,26 @@ def main():
     CPU_COUNT = 8
 
     # -- Loading datasets
-    print('\nLoading Datasets')
-    data_loader = DataLoader(seed=training_args.seed, shard_size=data_args.shard_size)
-    datasets = data_loader.load(data_args.dir_path)
+    # data_loader = DataLoader(seed=training_args.seed)
+    # dataset = data_loader.load(data_args.dir_path)
+    # dataset.push_to_hub("sh110495/summarization", private=True)
+    dataset = load_dataset("sh110495/summarization", 
+        use_auth_token=True, 
+        split="train"
+    )
 
     # -- Preprocessing datasets
-    print('\nPreprocessing Datasets')
     preprocessor = Preprocessor()
-    datasets = [d.map(preprocessor, batched=True, num_proc=CPU_COUNT) for d in datasets]
-
+    dataset = dataset.map(preprocessor, batched=True, num_proc=CPU_COUNT)
+    
     # -- Encoding datasets
-    print('\nEncoding Datasets')
     tokenizer = PegasusTokenizerFast.from_pretrained(model_args.PLM)
     encoder = Encoder(tokenizer, data_args.max_input_length, data_args.max_target_length)
-    datasets = [d.map(encoder, 
-        batched=True,
-        num_proc=CPU_COUNT,
-        remove_columns = datasets[0].column_names
-    ) for d in datasets]
-
-    datasets = concatenate_datasets(datasets)
+    dataset = dataset.map(encoder, 
+        batched=True, 
+        num_proc=CPU_COUNT, 
+        remove_columns=dataset.column_names
+    )
 
     # -- Configuration
     config = PegasusConfig.from_pretrained(model_args.PLM)
@@ -80,7 +80,7 @@ def main():
         logging_args=logging_args,
         model_create_fn=create_model,
         tokenizer=tokenizer,
-        datasets=datasets,
+        datasets=dataset,
         tpu_name="tpu"
     )
 
