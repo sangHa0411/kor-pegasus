@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from datasets import load_dataset
 from utils.loader import DataLoader
+from utils.recoder import Recoder
 from utils.preprocessor import Preprocessor
 from utils.encoder import Encoder
 from trainer import Trainer
@@ -77,6 +78,7 @@ def main():
     # -- Trainer
     trainer = Trainer(
         args=training_args,
+        data_args=data_args,
         logging_args=logging_args,
         model_create_fn=create_model,
         tokenizer=tokenizer,

@@ -3,6 +3,7 @@ import wandb
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tqdm import tqdm
+from utils.recoder import Recoder
 from dotenv import load_dotenv
 from models.metrics import Accuracy
 from models.scheduler import LinearWarmupSchedule
@@ -10,14 +11,14 @@ from models.scheduler import LinearWarmupSchedule
 
 class Trainer :
 
-    def __init__(self, args, logging_args, model_create_fn, tokenizer, datasets, tpu_name) :
+    def __init__(self, args, data_args, logging_args, model_create_fn, tokenizer, datasets, tpu_name) :
         self.args = args
         self.logging_args = logging_args
+        self.data_args = data_args
         self.model_create_fn = model_create_fn
         self.tokenizer = tokenizer
         self.datasets = datasets
         self.tpu_name = tpu_name
-
 
     def get_optimizer(self,) :
         steps_per_epoch = int(len(self.datasets) / self.args.batch_size)
@@ -51,6 +52,15 @@ class Trainer :
 
 
     def train(self) :
+
+        recoder = Recoder(batch_size=self.args.batch_size, 
+            max_input_length=self.data_args.max_input_length,
+            max_target_length=self.data_args.max_target_length
+        )
+
+        record_path = os.path.join(self.data_args.dir_path, "dataset.tfrecord")
+        recoder.write(dataset=self.dataset, path=record_path)
+
         # -- Setting TPU
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=self.tpu_name)
         tf.config.experimental_connect_to_cluster(resolver)
@@ -68,7 +78,7 @@ class Trainer :
 
         per_replica_batch_size = self.args.batch_size // strategy.num_replicas_in_sync
         tf_datasets = strategy.distribute_datasets_from_function(
-            lambda _: self.get_tf_datasets(self.datasets, batch_size=per_replica_batch_size)
+            lambda _: recoder.read(record_path, per_replica_batch_size)
         )
 
         TPU_NUM = len(tf.config.list_logical_devices('TPU'))
