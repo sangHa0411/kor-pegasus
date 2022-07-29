@@ -2,6 +2,7 @@ __pycache__
 raw_dataset
 dataset
 disk
+gcp
 wandb
 wandb.env
 *.ipynb

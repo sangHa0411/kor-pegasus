@@ -1,7 +1,9 @@
 import os
+import json
 import wandb
 import tensorflow as tf
 import tensorflow_addons as tfa
+from google.cloud import storage
 from tqdm import tqdm
 from utils.recoder import Recoder
 from dotenv import load_dotenv
@@ -52,16 +54,23 @@ class Trainer :
 
 
     def train(self) :
+        
+        # -- Cloud Storage
+        client = storage.Client(project="metal-sorter-345509")
+        bucket = client.bucket("two-ai", user_project="metal-sorter-345509")
 
-        recoder = Recoder(batch_size=self.args.batch_size, 
+        # -- Recording datasets
+        recoder = Recoder(bucket=bucket,
+            dir_path=self.data_args.dir_path,
             max_input_length=self.data_args.max_input_length,
             max_target_length=self.data_args.max_target_length
         )
 
-        record_path = os.path.join(self.data_args.dir_path, "dataset.tfrecord")
-        recoder.write(dataset=self.dataset, path=record_path)
+        print("\nWriting Datasets tfrecord format")
+        # recoder.write(dataset=self.datasets)
 
         # -- Setting TPU
+        print("\nTPU Setting")
         resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=self.tpu_name)
         tf.config.experimental_connect_to_cluster(resolver)
         tf.tpu.experimental.initialize_tpu_system(resolver)
@@ -78,7 +87,7 @@ class Trainer :
 
         per_replica_batch_size = self.args.batch_size // strategy.num_replicas_in_sync
         tf_datasets = strategy.distribute_datasets_from_function(
-            lambda _: recoder.read(record_path, per_replica_batch_size)
+            lambda _: recoder.read(per_replica_batch_size)
         )
 
         TPU_NUM = len(tf.config.list_logical_devices('TPU'))
@@ -89,10 +98,10 @@ class Trainer :
             """The step function for one training step."""
             def step_fn(data):
                 inputs, labels = data
+                labels = labels["labels"]
                 with tf.GradientTape() as tape:
                     logits = model(inputs, training=True)
-                    loss = tf.keras.losses.sparse_categorical_crossentropy(
-                        labels, logits, from_logits=True)
+                    loss = tf.keras.losses.sparse_categorical_crossentropy(labels, logits, from_logits=True)
 
                     loss = tf.where(labels==self.tokenizer.pad_token_id, 0.0, loss)
                     loss = tf.reduce_mean(loss) / TPU_NUM
@@ -105,9 +114,18 @@ class Trainer :
 
             strategy.run(step_fn, args=(next(iterator),))
 
-        # -- Training Steps
+        
         steps_per_epoch = int(len(self.datasets) / self.args.batch_size)
         total_steps = steps_per_epoch * self.args.epochs
+
+        # -- Training
+        print("\nTraining")
+        print("The number of data : %d" %len(self.datasets))
+        print("Training Batch Size : %d" %self.args.batch_size)
+        print("Total Steps : %d" %total_steps)
+        print("The number of training epochs : %d" %self.args.epochs)
+        print("Training steps per epoch : %d" %steps_per_epoch)
+        print("The number of TPU cores : %d" %TPU_NUM)
 
         train_iterator = iter(tf_datasets)
 
@@ -124,14 +142,6 @@ class Trainer :
         wandb.config.update(self.args)
 
         # -- Training loop
-        print("\nTraining")
-        print("The number of data : %d" %len(self.datasets))
-        print("Training Batch Size : %d" %self.args.batch_size)
-        print("Total Steps : %d" %total_steps)
-        print("The number of training epochs : %d" %self.args.epochs)
-        print("Training steps per epoch : %d" %steps_per_epoch)
-        print("The number of TPU cores : %d" %TPU_NUM)
-        
         progress_bar = tqdm(range(total_steps))
         for step in progress_bar :
             progress_bar.set_description("{}/{}".format(step, total_steps))  

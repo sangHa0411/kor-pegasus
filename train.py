@@ -35,6 +35,8 @@ def main():
         use_auth_token=True, 
         split="train"
     )
+    dataset = dataset.select(range(1000))
+    print(dataset)
 
     # -- Preprocessing datasets
     preprocessor = Preprocessor()
@@ -53,7 +55,6 @@ def main():
     config = PegasusConfig.from_pretrained(model_args.PLM)
 
     # -- Model
-    print('\nLoading Model')
     def create_model():
         ## -- Model Inputs
         input_ids = tf.keras.layers.Input(shape=(data_args.max_input_length,), dtype=tf.int32, name="input_ids")
