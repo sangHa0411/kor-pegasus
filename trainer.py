@@ -56,7 +56,7 @@ class Trainer :
     def train(self) :
         
         # -- Cloud Storage
-        client = storage.Client(project="metal-sorter-345509")
+        client = storage.Client()
         bucket = client.bucket("two-ai", user_project="metal-sorter-345509")
 
         # -- Recording datasets
@@ -67,7 +67,7 @@ class Trainer :
         )
 
         print("\nWriting Datasets tfrecord format")
-        # recoder.write(dataset=self.datasets)
+        recoder.write(dataset=self.datasets)
 
         # -- Setting TPU
         print("\nTPU Setting")
