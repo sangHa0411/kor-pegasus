@@ -30,7 +30,6 @@ class Trainer :
             self.args.learning_rate
         )
         optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=self.args.weight_decay)
-
         return optimizer
 
 
@@ -147,8 +146,8 @@ class Trainer :
             progress_bar.set_description("{}/{}".format(step, total_steps))  
             train_step(train_iterator)
 
-            cur_step = optimizer.iterations.numpy()
             # -- Logging to wandb
+            cur_step = optimizer.iterations.numpy()
             if cur_step % self.args.logging_steps == 0 :
                 cur_info = {
                     "loss" : round(float(training_loss.result()), 4),
@@ -179,7 +178,7 @@ class Trainer :
 
             print("\nRemoving {}".format(target))
 
-        save_path = os.path.join(self.args.save_path, "checkpoints-{}.h5".format(cur_step))
+        save_path = os.path.join(self.args.save_path, "checkpoint-{}.h5".format(cur_step))
         print("Saving {}\n".format(save_path))
         model.save(save_path)
 

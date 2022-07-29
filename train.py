@@ -35,7 +35,6 @@ def main():
         use_auth_token=True, 
         split="train"
     )
-    dataset = dataset.select(range(10000))
     print(dataset)
 
     # -- Preprocessing datasets

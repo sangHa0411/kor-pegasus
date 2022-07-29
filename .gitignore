@@ -1,5 +1,6 @@
 __pycache__
 raw_dataset
+checkpoints
 dataset
 disk
 gcp

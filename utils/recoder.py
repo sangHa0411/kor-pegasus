@@ -42,23 +42,22 @@ class Recoder :
         example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
         return example_proto.SerializeToString()
 
+    # not working
     def write(self, dataset) :
-        path = os.path.join(self.dir_path, "dataset.tfrecord")
+        storage_name = "gs://two-ai"
+        storage_path = os.path.join(storage_name, "dataset")
+        path = os.path.join(storage_path, "dataset.tfrecord")
+
         with tf.io.TFRecordWriter(path) as writer:
             for d in tqdm(dataset):
                 example = self.serialize_data(d)
                 writer.write(example)
 
-        blob = self.bucket.blob("/dataset/dataset.tfrecord")
-        blob.upload_from_filename(path)
-
-        path = os.path.join(self.dir_path, "labels.tfrecord")
+        path = os.path.join(storage_path, "labels.tfrecord")
         with tf.io.TFRecordWriter(path) as writer:
             for d in tqdm(dataset):
                 example = self.serialize_label(d)
                 writer.write(example)
-        blob = self.bucket.blob("/dataset/labels.tfrecord")
-        blob.upload_from_filename(path)
 
     def read(self, batch_size) :
 
