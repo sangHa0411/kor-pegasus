@@ -22,6 +22,7 @@ class Trainer :
         self.datasets = datasets
         self.tpu_name = tpu_name
 
+
     def get_optimizer(self,) :
         steps_per_epoch = int(len(self.datasets) / self.args.batch_size)
         total_steps = steps_per_epoch * self.args.epochs
@@ -31,25 +32,6 @@ class Trainer :
         )
         optimizer = tfa.optimizers.AdamW(learning_rate=warmup_scheduler, weight_decay=self.args.weight_decay)
         return optimizer
-
-
-    def get_tf_datasets(self, datasets, batch_size) :
-        input_ids = datasets["input_ids"]
-        attention_mask = datasets["attention_mask"]
-        decoder_input_ids = datasets["decoder_input_ids"]
-        decoder_attention_mask = datasets["decoder_attention_mask"]
-
-        labels = datasets["labels"]
-        
-        input_tensors = tf.data.Dataset.from_tensor_slices((input_ids, 
-            attention_mask, 
-            decoder_input_ids, 
-            decoder_attention_mask)
-            ).batch(batch_size)
-        label_tensors = tf.data.Dataset.from_tensor_slices(labels).batch(batch_size)
-
-        tf_datasets = tf.data.Dataset.zip((input_tensors, label_tensors))
-        return tf_datasets
 
 
     def train(self) :
@@ -66,7 +48,7 @@ class Trainer :
         )
 
         print("\nWriting Datasets tfrecord format")
-        recoder.write(dataset=self.datasets)
+        # recoder.write(dataset=self.datasets)
 
         # -- Setting TPU
         print("\nTPU Setting")
@@ -196,3 +178,4 @@ class Trainer :
             "train/accuracy" : cur_accuracy}, 
             step=cur_step
         )
+

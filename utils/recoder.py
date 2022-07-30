@@ -32,6 +32,7 @@ class Recoder :
         example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
         return example_proto.SerializeToString()
 
+
     def serialize_label(self, data):
         labels = data["labels"]
 
@@ -42,7 +43,7 @@ class Recoder :
         example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
         return example_proto.SerializeToString()
 
-    # not working
+
     def write(self, dataset) :
         storage_name = "gs://two-ai"
         storage_path = os.path.join(storage_name, "dataset")
@@ -58,6 +59,7 @@ class Recoder :
             for d in tqdm(dataset):
                 example = self.serialize_label(d)
                 writer.write(example)
+
 
     def read(self, batch_size) :
 

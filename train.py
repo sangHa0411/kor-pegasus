@@ -31,7 +31,7 @@ def main():
     # data_loader = DataLoader(seed=training_args.seed)
     # dataset = data_loader.load(data_args.dir_path)
     # dataset.push_to_hub("sh110495/summarization", private=True)
-    dataset = load_dataset("sh110495/summarization", 
+    dataset = load_dataset("sh110495/pegasus-summarization", 
         use_auth_token=True, 
         split="train"
     )
@@ -49,6 +49,7 @@ def main():
         num_proc=CPU_COUNT, 
         remove_columns=dataset.column_names
     )
+    print(dataset)
 
     # -- Configuration
     config = PegasusConfig.from_pretrained(model_args.PLM)
@@ -83,7 +84,7 @@ def main():
         model_create_fn=create_model,
         tokenizer=tokenizer,
         datasets=dataset,
-        tpu_name="tpu"
+        tpu_name="tpu-large"
     )
 
     # -- Training
